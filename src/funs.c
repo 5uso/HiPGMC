@@ -65,7 +65,20 @@ matrix initSIG(matrix x, uint k) {
 }
 
 matrix updateU(matrix q, uint m) {
-    //TODO
+    for(int j = 0; j < q.h; j++) {
+        for(int i = 0; i < q.w; i++) {
+            m.data[i] += m.data[j * m.w + i];
+        }
+    }
+
+    double vmin = 0.0d;
+    if(vmin >= 0.0d) return q;
+
+    double f = 1.0d;
+    double lambda_m = 0.0d;
+    for(int ft = 1; ft <= 100 && (f < 0.0d ? -f : f) < 10e-10; ft++) {
+
+    }
     return q;
 }
 
