@@ -65,20 +65,47 @@ matrix initSIG(matrix x, uint k) {
 }
 
 matrix updateU(matrix q, uint m) {
-    for(int j = 0; j < q.h; j++) {
-        for(int i = 0; i < q.w; i++) {
-            m.data[i] += m.data[j * m.w + i];
-        }
+    for(int j = 1; j < q.h; j++) {
+        for(int i = 0; i < q.w; i++) q.data[i] += q.data[j * q.w + i];
+    }
+    q.h = 1;
+
+    double mean = 0.0d;
+    for(int i = 0; i < q.w; i++) mean += q.data[i];
+    mean /= q.w;
+
+    double vmin = INFINITY;
+    for(int i = 0; i < q.w; i++) {
+        q.data[i] = (q.data[i] - mean) / m + 1.0d / q.w;
+        if(vmin > q.data[i]) vmin = q.data[i];
     }
 
-    double vmin = 0.0d;
     if(vmin >= 0.0d) return q;
 
     double f = 1.0d;
     double lambda_m = 0.0d;
-    for(int ft = 1; ft <= 100 && (f < 0.0d ? -f : f) < 10e-10; ft++) {
+    double lambda_d = 0.0d;
+    for(int i = 0; i < q.w; i++) q.data[i] = -q.data[i];
 
+    for(int ft = 1; ft <= 100 && (f < 0.0d ? -f : f) > 10e-10; ft++) {
+        double sum = 0.0d;
+        int npos = 0;
+        for(int i = 0; i < q.w; i++) {
+            if((q.data[i] += lambda_d) > 0.0d) {
+                sum += q.data[i];
+                npos++;
+            } 
+        }
+
+        double g = (double)npos / q.w - 1.0d + EPS;
+        f = sum / q.w - lambda_m;
+        lambda_m += (lambda_d = -f / g);
     }
+
+    for(int i = 0; i < q.w; i++) {
+        if((q.data[i] = -q.data[i]) < 0.0d) q.data[i] = 0.0d;
+    }
+
     return q;
 }
 

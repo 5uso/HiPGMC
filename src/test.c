@@ -18,14 +18,13 @@ int main(int argc, char *argv[]) {
     set(m, 2, 1, 14.0d);
     set(m, 0, 2, 10.0d);
     set(m, 1, 2, 14.0d);
-    set(m, 2, 2, 18.0d);
+    set(m, 2, 2, 8.0d);
     
-    matrix d = eig(m, 3);
-    print(d);
-    printf("\n");
-    print(m);
+    matrix d = updateU(m, 10);
     gettimeofday(&end, 0);
     printf("Time measured: %.3f seconds.\n", end.tv_sec - begin.tv_sec + (end.tv_usec - begin.tv_usec) * 1e-6);
+    print(d);
+    printf("\n");
 
     return 0;
 }
