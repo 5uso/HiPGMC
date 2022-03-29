@@ -1,5 +1,5 @@
 #include "gmc.h"
 
-gmc_result gmc(matrix * X, uint c, uint lambda, bool normalize) {
+gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
 
 }

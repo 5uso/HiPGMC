@@ -11,6 +11,6 @@ typedef struct gmc_result {
     matrix evs;
 } gmc_result;
 
-gmc_result gmc(matrix * X, uint c, uint lambda, bool normalize);
+gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize);
 
 #endif
