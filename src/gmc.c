@@ -5,7 +5,23 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
 
     //Normalize data
     if(normalize) {
-        //TODO
+        for(int i = 0; i < m; i++) {
+            for(int y = 0; y < num; y++) {
+                double mean = 0.0d;
+                for(int x = 0; x < num; x++) mean += U.data[y][x];
+                mean /= (double) num;
+
+                double std = 0.0d;
+                for(int x = 0; x < num; x++) {
+                    double dev = U.data[y][x] - mean;
+                    std += dev * dev;
+                }
+                std /= (double) num;
+                std = sqrt(std);
+
+                for(int x = 0; x < num; x++) U.data[y][x] = (U.data[y][x] - mean) / (std + EPS);
+            }
+        }
     }
 
     //Initialize SIG matrices
