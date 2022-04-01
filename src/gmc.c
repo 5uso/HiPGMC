@@ -28,9 +28,24 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     matrix * S0 = malloc(m * sizeof(matrix *));
     for(int i = 0; i < m; i++) S0[i] = initSIG(X[i], PN);
 
+    //U starts as average of SIG matrices
     matrix U = newMatrix(num, num);
-    //TODO: U starts as average of SIG matrices
-    //TODO: Divide each row of U by its own sum
+    memcpy_s(U.data, num * num, S0[0].data, num * num)
+    for(int i = 1; i < m; i++) {
+        for(int y = 0; y < num; y++) {
+            for(int x = 0; x < num; x++) U.data[y][x] += S0[i].data[y][x];
+        }
+    }
+    for(int y = 0; y < num; y++) {
+        for(int x = 0; x < num; x++) U.data[y][x] /= (double) num;
+    }
+
+    //Divide each row of U by its own sum
+    for(int y = 0; y < num; y++) {
+        double sum = 0.0d;
+        for(int x = 0; x < num; x++) sum += U.data[y][x];
+        for(int x = 0; x < num; x++) U.data[y][x] /= sum;
+    }
 
     //TODO: The thing with symmetric U into eigenvectors, gets F
 
