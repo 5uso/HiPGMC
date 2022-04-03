@@ -47,9 +47,18 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
         for(int x = 0; x < num; x++) U.data[y][x] /= sum;
     }
 
-    //TODO: The thing with symmetric U into eigenvectors, gets F
-    matrix F;
-
+    //Get matrix of eigenvectors (F), as well as eigenvalues
+    matrix F = newMatrix(num, num);
+    for(int x = 0; x < num; x++) {
+        double sum = 0.0d;
+        for(int y = 0; y <= x; y++) {
+            double t = -(U.data[y][x] + U.data[x][y]) / 2.0d;
+            F.data[y][x] = t;
+            sum += t;
+        }
+        F.data[x][x] -= sum;
+    }
+    matrix evs = eig(F, c);
 
     double wI = 1.0 / m;
     matrix w = newMatrix(m, 1);
