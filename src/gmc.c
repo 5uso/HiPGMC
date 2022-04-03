@@ -7,25 +7,26 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     if(normalize) {
         for(int i = 0; i < m; i++) {
             for(int y = 0; y < num; y++) {
+                int w = X[i].w;
                 double mean = 0.0d;
-                for(int x = 0; x < num; x++) mean += U.data[y][x];
-                mean /= (double) num;
+                for(int x = 0; x < w; x++) mean += X[i].data[y * w + x];
+                mean /= (double) w;
 
                 double std = 0.0d;
-                for(int x = 0; x < num; x++) {
-                    double dev = U.data[y][x] - mean;
+                for(int x = 0; x < w; x++) {
+                    double dev = X[i].data[y * w + x] - mean;
                     std += dev * dev;
                 }
-                std /= (double) num;
+                std /= (double) w;
                 std = sqrt(std);
 
-                for(int x = 0; x < num; x++) U.data[y][x] = (U.data[y][x] - mean) / (std + EPS);
+                for(int x = 0; x < w; x++) X[i].data[y * w + x] = (X[i].data[y * w + x] - mean) / (std + EPS);
             }
         }
     }
 
     //Initialize SIG matrices
-    matrix * S0 = malloc(m * sizeof(matrix *));
+    matrix * S0 = malloc(m * sizeof(matrix));
     for(int i = 0; i < m; i++) S0[i] = initSIG(X[i], PN);
 
     //U starts as average of SIG matrices
@@ -33,43 +34,46 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     memcpy_s(U.data, num * num, S0[0].data, num * num);
     for(int i = 1; i < m; i++) {
         for(int y = 0; y < num; y++) {
-            for(int x = 0; x < num; x++) U.data[y][x] += S0[i].data[y][x];
+            for(int x = 0; x < num; x++) U.data[y * num + x] += S0[i].data[y * num + x];
         }
     }
     for(int y = 0; y < num; y++) {
-        for(int x = 0; x < num; x++) U.data[y][x] /= (double) num;
+        for(int x = 0; x < num; x++) U.data[y * num + x] /= (double) num;
     }
 
     //Divide each row of U by its own sum
     for(int y = 0; y < num; y++) {
         double sum = 0.0d;
-        for(int x = 0; x < num; x++) sum += U.data[y][x];
-        for(int x = 0; x < num; x++) U.data[y][x] /= sum;
+        for(int x = 0; x < num; x++) sum += U.data[y * num + x];
+        for(int x = 0; x < num; x++) U.data[y * num + x] /= sum;
     }
 
     //Get matrix of eigenvectors (F), as well as eigenvalues
     matrix F = newMatrix(num, num);
+    matrix F_old = newMatrix(num, num);
     for(int x = 0; x < num; x++) {
         double sum = 0.0d;
         for(int y = 0; y <= x; y++) {
-            double t = -(U.data[y][x] + U.data[x][y]) / 2.0d;
-            F.data[y][x] = t;
+            double t = -(U.data[y * num + x] + U.data[x * num + y]) / 2.0d;
+            F.data[y * num + x] = t;
             sum += t;
         }
-        F.data[x][x] -= sum;
+        F.data[x * num + x] -= sum;
     }
-    matrix evs = eig(F, c);
+    double * evs = malloc(num * NITER * sizeof(double));
+    eig(F, evs, c);
 
     double wI = 1.0 / m;
     matrix w = newMatrix(m, 1);
     for(int i = 0; i < m; i++) w.data[i] = wI;
 
-    matrix * ed = malloc(m * sizeof(matrix *));
-    matrix * idxx = malloc(m * sizeof(matrix *));
+    matrix * ed = malloc(m * sizeof(matrix));
+    matrix * idxx = malloc(m * sizeof(matrix));
     for(int i = 0; i < m; i++) {
         ed[i] = sqrDist(X[i]);
         //TODO: Store sort into idxx (heap, since the loop uses lowest values?)
     }
+    //After this is done we no longer need X, maybe free it.
 
     for(int it = 0; it < NITER; it++) {
         //TODO: Update S0
@@ -85,7 +89,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
         for(int i = 0; i < m; i++) {
             memcpy_s(sU.data, num * num, U.data, num * num);
             for(int y = 0; y < num; y++) {
-                for(int x = 0; x < num; x++) sU.data[y][x] -= S0[i].data[y][x];
+                for(int x = 0; x < num; x++) sU.data[y * num + x] -= S0[i].data[y * num + x];
             }
 
             double distUS = LAPACKE_dlange('F', num, num, sU.data, num, NULL);
@@ -100,9 +104,36 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
 
         }
 
-        //TODO: The thing with symmetric U into eigenvectors, gets F
+        //Update matrix of eigenvectors (F), as well as eigenvalues
+        matrix temp = F_old;
+        F_old = F;
+        F = temp;
+        for(int x = 0; x < num; x++) { //TODO: Extract function?
+            double sum = 0.0d;
+            for(int y = 0; y <= x; y++) {
+                double t = -(U.data[y * num + x] + U.data[x * num + y]) / 2.0d;
+                F.data[y * num + x] = t;
+                sum += t;
+            }
+            F.data[x * num + x] -= sum;
+        }
+        double * ev = evs + num * it;
+        eig(F, ev, c);
 
-        //TODO: Lambda stuff
+        //Update lambda
+        double fn = 0.0d;
+        for(int i = 0; i < c; i++) fn += ev.data[i];
+        if(fn > ZR) {
+            lambda *= 2.0d;
+        } else if(fn + ev.data[c] < ZR) {
+            lambda /= 2.0d;
+            temp = F_old;
+            F_old = F;
+            F = temp;
+        } else {
+            printf("Iteration %d: λ=%lf\n", it, lambda);
+            break;
+        }
     }
 
     //TODO: Final clustering

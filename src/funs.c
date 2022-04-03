@@ -109,8 +109,7 @@ matrix updateU(matrix q, uint m) {
     return q;
 }
 
-matrix eig(matrix l, uint c) {
-    matrix w = newMatrix(l.w, 1);
-    LAPACKE_dsyev(LAPACK_COL_MAJOR, 'V', 'U', l.w, l.data, l.w, w.data); //TODO: Row major only outputs the upper triangular of eigenvectors?
-    return w; //Eigenvalues in ascending order, eigenvectors are returned inside l.
+void eig(matrix l, double * w, uint c) {
+    //Eigenvalues go in ascending order inside w, eigenvectors are returned inside l. w is an array sized as a row of l.
+    LAPACKE_dsyev(LAPACK_COL_MAJOR, 'V', 'U', l.w, l.data, l.w, w); //TODO: Row major only outputs the upper triangular of eigenvectors?
 }
