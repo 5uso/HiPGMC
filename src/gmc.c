@@ -51,8 +51,8 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     //Get matrix of eigenvectors (F), as well as eigenvalues
     matrix F = newMatrix(num, num);
     matrix F_old = newMatrix(num, num);
-    double * evs = malloc(num * NITER * sizeof(double));
-    updatef(F, U, evs, c);
+    matrix evs = newMatrix(num, NITER + 1);
+    updatef(F, U, evs.data, c);
 
     double wI = 1.0 / m;
     matrix w = newMatrix(m, 1);
@@ -99,7 +99,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
         matrix temp = F_old;
         F_old = F;
         F = temp;
-        double * ev = evs + num * it;
+        double * ev = evs.data + num * it;
         updatef(F, U, ev, c);
 
         //Update lambda
@@ -114,12 +114,13 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
             F = temp;
         } else {
             printf("Iteration %d: λ=%lf\n", it, lambda);
+            evs.h = it + 2;
             break;
         }
     }
 
     //TODO: Final clustering
     gmc_result result;
-    result.y = NULL; result.U = U; result.S0 = S0; result.F = NULL; result.evs = NULL;
+    result.y = NULL; result.U = U; result.S0 = S0; result.F = F; result.evs = evs;
     return result;
 }
