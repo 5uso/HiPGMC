@@ -51,17 +51,8 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     //Get matrix of eigenvectors (F), as well as eigenvalues
     matrix F = newMatrix(num, num);
     matrix F_old = newMatrix(num, num);
-    for(int x = 0; x < num; x++) {
-        double sum = 0.0d;
-        for(int y = 0; y <= x; y++) {
-            double t = -(U.data[y * num + x] + U.data[x * num + y]) / 2.0d;
-            F.data[y * num + x] = t;
-            sum += t;
-        }
-        F.data[x * num + x] -= sum;
-    }
     double * evs = malloc(num * NITER * sizeof(double));
-    eig(F, evs, c);
+    updatef(F, U, evs, c);
 
     double wI = 1.0 / m;
     matrix w = newMatrix(m, 1);
@@ -108,17 +99,8 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
         matrix temp = F_old;
         F_old = F;
         F = temp;
-        for(int x = 0; x < num; x++) { //TODO: Extract function?
-            double sum = 0.0d;
-            for(int y = 0; y <= x; y++) {
-                double t = -(U.data[y * num + x] + U.data[x * num + y]) / 2.0d;
-                F.data[y * num + x] = t;
-                sum += t;
-            }
-            F.data[x * num + x] -= sum;
-        }
         double * ev = evs + num * it;
-        eig(F, ev, c);
+        updatef(F, U, ev, c);
 
         //Update lambda
         double fn = 0.0d;

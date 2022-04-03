@@ -109,7 +109,17 @@ matrix updateU(matrix q, uint m) {
     return q;
 }
 
-void eig(matrix l, double * w, uint c) {
+void updateF(matrix F, matrix U, double * ev, uint c) {
+    for(int x = 0; x < U.w; x++) {
+        double sum = 0.0d;
+        for(int y = 0; y <= x; y++) {
+            double t = -(U.data[y * U.w + x] + U.data[x * U.w + y]) / 2.0d;
+            F.data[y * F.w + x] = t;
+            sum += t;
+        }
+        F.data[x * F.w + x] -= sum;
+    }
+
     //Eigenvalues go in ascending order inside w, eigenvectors are returned inside l. w is an array sized as a row of l.
-    LAPACKE_dsyev(LAPACK_COL_MAJOR, 'V', 'U', l.w, l.data, l.w, w); //TODO: Row major only outputs the upper triangular of eigenvectors?
+    LAPACKE_dsyev(LAPACK_COL_MAJOR, 'V', 'U', F.w, F.data, F.w, ev); //TODO: Row major only outputs the upper triangular of eigenvectors?
 }
