@@ -122,7 +122,23 @@ void updateF(matrix F, matrix U, double * ev, uint c) {
     LAPACKE_dsyev(LAPACK_COL_MAJOR, 'V', 'U', F.w, F.data, F.w, ev); //TODO: Row major only outputs the upper triangular of eigenvectors?
 }
 
+void __compTraversal(int node, matrix m, int * y, int cluster) {
+    y[node] = cluster;
+    for(int i = node + 1; i < m.w; i++) {
+        if(m.data[node * m.w + i] != 0.0d) __compTraversal(i, m, y, cluster);
+    }
+}
+
 int connectedComp(matrix m, int * y) {
-    //TODO
-    
+    memset(y, 0xFF, m.w * sizeof(int));
+
+    int c = 0;
+    for(int i = 0; i < m.w; i++) {
+        if(y[i] == -1) {
+            __compTraversal(i, m, y, c);
+            c++;
+        }
+    }
+
+    return c;
 }
