@@ -91,12 +91,45 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
         }
         freeMatrix(US);
 
-        //TODO: Update U
-        matrix dist = sqrDist(F); //This actually needs F to be transposed
-        //U gets set to all zeros
+        //Update U
+        matrix dist = sqrDist(F); //TODO: This actually needs F to be transposed
+        bool * idx = malloc(num * sizeof(bool));
         for(int y = 0; y < num; y++) {
-
+            int qw = 0;
+            #ifdef IS_LOCAL
+                for(int x = 0; x < num; x++) {
+                    idx[x] = (S0[0].data[y * num + x] > 0);
+                    qw += idx[x];
+                }
+                for(int v = 1; v < m; v++) {
+                    for(int x = 0; x < num; x++) {
+                        qw -= idx[x];
+                        idx[x] |= (S0[v].data[y * num + x] > 0);
+                        qw += idx[x];
+                    }
+                }
+            #else
+                memset(idx, 0x00, num * sizeof(bool));
+                qw = num;
+            #endif
+            matrix q = newMatrix(qw, m);
+            for(int x = 0, i = 0; x < num; x++) {
+                if(idx[x]) q.data[i++] = lambda * (double) abs(y - x) / (double) m * -0.5d;
+            }
+            for(int v = m - 1; v >= 0; v--) {
+                for(int x = 0, i = 0; x < num; x++) {
+                    if(idx[x]) q.data[v * qw + i] = q.data[i++] / w.data[v] + S0[v].data[y * num + x];
+                }
+            }
+            
+            q = updateU(q);
+            for(int x = 0, i = 0; x < num; x++) {
+                if(idx[x]) U.data[y * num + x] = q.data[i++];
+                else U.data[y * num + x] = 0.0d;
+            }
+            freeMatrix(q);
         }
+        free(idx);
 
         //Update matrix of eigenvectors (F), as well as eigenvalues
         matrix temp = F_old;
