@@ -6,11 +6,12 @@
 #include <stdbool.h>
 
 typedef struct gmc_result {
-    matrix y;
     matrix U;
     matrix S0;
     matrix F;
     matrix evs;
+    int * y;
+    int n;
 } gmc_result;
 
 gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize);

@@ -54,12 +54,12 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     matrix evs = newMatrix(num, NITER + 1);
     updateF(F, U, evs.data, c);
 
-    // Initialize w to m uniform (All views start with the same weight)
+    //Initialize w to m uniform (All views start with the same weight)
     double wI = 1.0 / m;
     matrix w = newMatrix(m, 1);
     for(int i = 0; i < m; i++) w.data[i] = wI;
 
-    // Used when calculating S0
+    //Used when calculating S0
     matrix * ed = malloc(m * sizeof(matrix));
     matrix * idxx = malloc(m * sizeof(matrix));
     for(int i = 0; i < m; i++) {
@@ -155,8 +155,12 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
         }
     }
 
-    //TODO: Final clustering. Find connected components on sU with Tarjan's algorithm
+    //Final clustering. Find connected components on sU with Tarjan's algorithm
+    int * y = malloc(sU.w * sizeof(int));
+    int clusterNum = connectedComp(sU, y);
+    if(clusterNum != c) printf("Couldn't find requested cluster number (%d). Got %d clusters\n", c, clusterNum);
+
     gmc_result result;
-    result.y = NULL; result.U = U; result.S0 = S0; result.F = F; result.evs = evs;
+    result.U = U; result.S0 = S0; result.F = F; result.evs = evs; result.y = y; result.n = sU.w;
     return result;
 }

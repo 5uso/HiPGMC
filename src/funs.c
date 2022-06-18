@@ -121,3 +121,8 @@ void updateF(matrix F, matrix U, double * ev, uint c) {
     //Eigenvalues go in ascending order inside w, eigenvectors are returned inside l. w is an array sized as a row of l.
     LAPACKE_dsyev(LAPACK_COL_MAJOR, 'V', 'U', F.w, F.data, F.w, ev); //TODO: Row major only outputs the upper triangular of eigenvectors?
 }
+
+int connectedComp(matrix m, int * y) {
+    //TODO
+    
+}
