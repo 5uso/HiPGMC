@@ -3,6 +3,7 @@
 
 #include "funs.h"
 #include <string.h>
+#include <stdbool.h>
 
 typedef struct gmc_result {
     matrix y;

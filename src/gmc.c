@@ -52,12 +52,14 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     matrix F = newMatrix(num, num);
     matrix F_old = newMatrix(num, num);
     matrix evs = newMatrix(num, NITER + 1);
-    updatef(F, U, evs.data, c);
+    updateF(F, U, evs.data, c);
 
+    // Initialize w to m uniform (All views start with the same weight)
     double wI = 1.0 / m;
     matrix w = newMatrix(m, 1);
     for(int i = 0; i < m; i++) w.data[i] = wI;
 
+    // Used when calculating S0
     matrix * ed = malloc(m * sizeof(matrix));
     matrix * idxx = malloc(m * sizeof(matrix));
     for(int i = 0; i < m; i++) {
@@ -66,6 +68,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     }
     //After this is done we no longer need X, maybe free it.
 
+    // Main loop
     for(int it = 0; it < NITER; it++) {
         //TODO: Update S0
         for(int i = 0; i < m; i++) {
@@ -76,17 +79,17 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
         }
 
         //Update w
-        matrix sU = newMatrix(num, num);
+        matrix US = newMatrix(num, num);
         for(int i = 0; i < m; i++) {
-            memcpy_s(sU.data, num * num, U.data, num * num);
+            memcpy_s(US.data, num * num, U.data, num * num);
             for(int y = 0; y < num; y++) {
-                for(int x = 0; x < num; x++) sU.data[y * num + x] -= S0[i].data[y * num + x];
+                for(int x = 0; x < num; x++) US.data[y * num + x] -= S0[i].data[y * num + x];
             }
 
-            double distUS = LAPACKE_dlange('F', num, num, sU.data, num, NULL);
+            double distUS = LAPACKE_dlange('F', num, num, US.data, num, NULL);
             w.data[i] = 0.5d / (distUS + EPS);
         }
-        freeMatrix(sU);
+        freeMatrix(US);
 
         //TODO: Update U
         matrix dist = sqrDist(F); //This actually needs F to be transposed
@@ -100,7 +103,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
         F_old = F;
         F = temp;
         double * ev = evs.data + num * it;
-        updatef(F, U, ev, c);
+        updateF(F, U, ev, c);
 
         //Update lambda
         double fn = 0.0d;
@@ -119,7 +122,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
         }
     }
 
-    //TODO: Final clustering
+    //TODO: Final clustering. Find connected components on sU with Tarjan's algorithm
     gmc_result result;
     result.y = NULL; result.U = U; result.S0 = S0; result.F = F; result.evs = evs;
     return result;

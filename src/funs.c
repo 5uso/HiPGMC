@@ -1,7 +1,5 @@
 #include "funs.h"
 
-#include <stdio.h>
-
 matrix sqrDist(matrix m) {
     //Compute sum of squared columns vector
     double * ssc = malloc(m.w * sizeof(double));
@@ -64,11 +62,10 @@ matrix initSIG(matrix x, uint k) {
     return d;
 }
 
-matrix updateU(matrix q, uint m) {
+matrix updateU(matrix q) { //Height of q is m
     for(int j = 1; j < q.h; j++) {
         for(int i = 0; i < q.w; i++) q.data[i] += q.data[j * q.w + i];
     }
-    q.h = 1;
 
     double mean = 0.0d;
     for(int i = 0; i < q.w; i++) mean += q.data[i];
@@ -76,7 +73,7 @@ matrix updateU(matrix q, uint m) {
 
     double vmin = INFINITY;
     for(int i = 0; i < q.w; i++) {
-        q.data[i] = (q.data[i] - mean) / m + 1.0d / q.w;
+        q.data[i] = (q.data[i] - mean) / q.h + 1.0d / q.w;
         if(vmin > q.data[i]) vmin = q.data[i];
     }
 
@@ -106,6 +103,7 @@ matrix updateU(matrix q, uint m) {
         if((q.data[i] = -q.data[i]) < 0.0d) q.data[i] = 0.0d;
     }
 
+    q.h = 1;
     return q;
 }
 
