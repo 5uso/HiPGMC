@@ -5,36 +5,36 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
 
     //Normalize data
     if(normalize) {
-        for(int i = 0; i < m; i++) {
+        for(int v = 0; v < m; v++) {
             for(int y = 0; y < num; y++) {
-                int w = X[i].w;
+                int w = X[v].w;
                 double mean = 0.0d;
-                for(int x = 0; x < w; x++) mean += X[i].data[y * w + x];
+                for(int x = 0; x < w; x++) mean += X[v].data[y * w + x];
                 mean /= (double) w;
 
                 double std = 0.0d;
                 for(int x = 0; x < w; x++) {
-                    double dev = X[i].data[y * w + x] - mean;
+                    double dev = X[v].data[y * w + x] - mean;
                     std += dev * dev;
                 }
                 std /= (double) w;
                 std = sqrt(std);
 
-                for(int x = 0; x < w; x++) X[i].data[y * w + x] = (X[i].data[y * w + x] - mean) / (std + EPS);
+                for(int x = 0; x < w; x++) X[v].data[y * w + x] = (X[v].data[y * w + x] - mean) / (std + EPS);
             }
         }
     }
 
     //Initialize SIG matrices
     matrix * S0 = malloc(m * sizeof(matrix));
-    for(int i = 0; i < m; i++) S0[i] = initSIG(X[i], PN);
+    for(int v = 0; v < m; v++) S0[v] = initSIG(X[v], PN);
 
     //U starts as average of SIG matrices
     matrix U = newMatrix(num, num);
     memcpy_s(U.data, num * num, S0[0].data, num * num);
-    for(int i = 1; i < m; i++) {
+    for(int v = 1; v < m; v++) {
         for(int y = 0; y < num; y++) {
-            for(int x = 0; x < num; x++) U.data[y * num + x] += S0[i].data[y * num + x];
+            for(int x = 0; x < num; x++) U.data[y * num + x] += S0[v].data[y * num + x];
         }
     }
     for(int y = 0; y < num; y++) {
@@ -57,21 +57,27 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     //Initialize w to m uniform (All views start with the same weight)
     double wI = 1.0 / m;
     matrix w = newMatrix(m, 1);
-    for(int i = 0; i < m; i++) w.data[i] = wI;
+    for(int v = 0; v < m; v++) w.data[v] = wI;
 
     //Used when calculating S0
     matrix * ed = malloc(m * sizeof(matrix));
-    matrix * idxx = malloc(m * sizeof(matrix));
-    for(int i = 0; i < m; i++) {
-        ed[i] = sqrDist(X[i]);
-        //TODO: Store sort into idxx (heap, since the loop uses lowest values?)
+    heap * idxx = malloc(m * num * sizeof(heap));
+    for(int v = 0; v < m; v++) {
+        ed[v] = sqrDist(X[v]);
+        //TODO: Check -> Store sort into idxx (heap, since the loop uses lowest values?)
+        for(int y = 0; y < num; y++) {
+            idxx[v * num + y] = newHeap(ed[v].data + y * num, PN + 1);
+            for(int x = PN + 1; x < num; x++) {
+                if(ed[v].data[y * num + x] < heapMax(idxx[v * num + y])) replace(idxx + v * num + y, ed[v].data + y * num + x);
+            }
+        }
     }
-    //After this is done we no longer need X, maybe free it.
+    //After this is done we no longer need X, maybe free it. (Maybe not since it's an input)
 
     // Main loop
     for(int it = 0; it < NITER; it++) {
         //TODO: Update S0
-        for(int i = 0; i < m; i++) {
+        for(int v = 0; v < m; v++) {
             //S0 gets set to all zeros
             for(int y = 0; y < num; y++) {
                 
@@ -80,19 +86,19 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
 
         //Update w
         matrix US = newMatrix(num, num);
-        for(int i = 0; i < m; i++) {
+        for(int v = 0; v < m; v++) {
             memcpy_s(US.data, num * num, U.data, num * num);
             for(int y = 0; y < num; y++) {
-                for(int x = 0; x < num; x++) US.data[y * num + x] -= S0[i].data[y * num + x];
+                for(int x = 0; x < num; x++) US.data[y * num + x] -= S0[v].data[y * num + x];
             }
 
             double distUS = LAPACKE_dlange('F', num, num, US.data, num, NULL);
-            w.data[i] = 0.5d / (distUS + EPS);
+            w.data[v] = 0.5d / (distUS + EPS);
         }
         freeMatrix(US);
 
         //Update U
-        matrix dist = sqrDist(F); //TODO: This actually needs F to be transposed
+        matrix dist = sqrDist(F); //TODO: This actually needs F to be transposed. Create a function sqrDistT?
         bool * idx = malloc(num * sizeof(bool));
         for(int y = 0; y < num; y++) {
             int qw = 0;

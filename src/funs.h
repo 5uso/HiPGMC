@@ -11,7 +11,7 @@
 
 matrix sqrDist(matrix m);
 matrix initSIG(matrix x, uint k);
-matrix updateU(matrix q, uint m);
+matrix updateU(matrix q);
 matrix eig(matrix l, uint c);
 int connectedComp(matrix m, int * y);
 
