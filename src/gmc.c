@@ -62,25 +62,38 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     //Used when calculating S0
     matrix * ed = malloc(m * sizeof(matrix));
     heap * idxx = malloc(m * num * sizeof(heap));
+    double * sums = malloc(m * num * sizeof(double));
     for(int v = 0; v < m; v++) {
         ed[v] = sqrDist(X[v]);
         //TODO: Check -> Store sort into idxx (heap, since the loop uses lowest values?)
         for(int y = 0; y < num; y++) {
-            idxx[v * num + y] = newHeap(ed[v].data + y * num, PN + 1);
+            heap h = newHeap(ed[v].data + y * num, PN + 1);
             for(int x = PN + 1; x < num; x++) {
-                if(ed[v].data[y * num + x] < heapMax(idxx[v * num + y])) replace(idxx + v * num + y, ed[v].data + y * num + x);
+                if(ed[v].data[y * num + x] < heapMax(h)) replace(&h, ed[v].data + y * num + x);
             }
+            idxx[v * num + y] = h;
+            sums[v * num + y] = 0.0d;
+            for(int x = 1; x < PN + 1; x++) sums[v * num + y] += *h.data[x];
         }
     }
     //After this is done we no longer need X, maybe free it. (Maybe not since it's an input)
 
     // Main loop
     for(int it = 0; it < NITER; it++) {
-        //TODO: Update S0
         for(int v = 0; v < m; v++) {
-            //S0 gets set to all zeros
             for(int y = 0; y < num; y++) {
-                
+                heap h = idxx[v * num + y];
+                void* offsetU = U.data - ed[v].data;
+                double weight = w.data[v] *  2.0d;
+
+                double sumU = 0.0d;
+                for(int x = 0; x < PN + 1; x++) sumU += *(offsetU + h.data[x]);
+
+                double numerator = heapMax(h) - *(offsetU + h.data[0]) * weight;
+                double denominator1 = PN * heapMax(h) - sums[v * num + y];
+                double denominator2 = (sumU - *(offsetU + h.data[0]) * PN) * weight;
+
+                //TODO: Set each S0 value. Non indexed positions should be set to 0
             }
         }
 
