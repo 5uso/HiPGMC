@@ -7,11 +7,12 @@
 
 typedef struct gmc_result {
     matrix U;
-    matrix S0;
+    matrix * S0;
     matrix F;
     matrix evs;
     int * y;
     int n;
+    int m;
 } gmc_result;
 
 gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize);

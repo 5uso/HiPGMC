@@ -31,7 +31,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
 
     //U starts as average of SIG matrices
     matrix U = newMatrix(num, num);
-    memcpy_s(U.data, num * num, S0[0].data, num * num);
+    memcpy(U.data, S0[0].data, num * num);
     for(int v = 1; v < m; v++) {
         for(int y = 0; y < num; y++) {
             for(int x = 0; x < num; x++) U.data[y * num + x] += S0[v].data[y * num + x];
@@ -106,12 +106,12 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
         //Update w
         matrix US = newMatrix(num, num);
         for(int v = 0; v < m; v++) {
-            memcpy_s(US.data, num * num, U.data, num * num);
+            memcpy(US.data, U.data, num * num);
             for(int y = 0; y < num; y++) {
                 for(int x = 0; x < num; x++) US.data[y * num + x] -= S0[v].data[y * num + x];
             }
 
-            double distUS = LAPACKE_dlange('F', num, num, US.data, num, NULL);
+            double distUS = LAPACKE_dlange(LAPACK_COL_MAJOR, 'F', num, num, US.data, num);
             w.data[v] = 0.5d / (distUS + EPS);
         }
         freeMatrix(US);
@@ -139,18 +139,26 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
             #endif
             matrix q = newMatrix(qw, m);
             for(int x = 0, i = 0; x < num; x++) {
-                if(idx[x]) q.data[i++] = lambda * (double) abs(y - x) / (double) m * -0.5d;
+                if(idx[x]) {
+                    q.data[i] = lambda * dist.data[y * num + x] / (double) m * -0.5d;
+                    i++;
+                } 
             }
             for(int v = m - 1; v >= 0; v--) {
                 for(int x = 0, i = 0; x < num; x++) {
-                    if(idx[x]) q.data[v * qw + i] = q.data[i++] / w.data[v] + S0[v].data[y * num + x];
+                    if(idx[x]) {
+                        q.data[v * qw + i] = q.data[i] / w.data[v] + S0[v].data[y * num + x];
+                        i++;
+                    }
                 }
             }
             
             q = updateU(q);
             for(int x = 0, i = 0; x < num; x++) {
-                if(idx[x]) U.data[y * num + x] = q.data[i++];
-                else U.data[y * num + x] = 0.0d;
+                if(idx[x]) {
+                    U.data[y * num + x] = q.data[i];
+                    i++;
+                }  else U.data[y * num + x] = 0.0d;
             }
             freeMatrix(q);
         }
@@ -165,10 +173,10 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
 
         //Update lambda
         double fn = 0.0d;
-        for(int i = 0; i < c; i++) fn += ev.data[i];
+        for(int i = 0; i < c; i++) fn += ev[i];
         if(fn > ZR) {
             lambda *= 2.0d;
-        } else if(fn + ev.data[c] < ZR) {
+        } else if(fn + ev[c] < ZR) {
             lambda /= 2.0d;
             temp = F_old;
             F_old = F;
@@ -195,6 +203,6 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     //TODO: Free everything
 
     gmc_result result;
-    result.U = U; result.S0 = S0; result.F = F; result.evs = evs; result.y = y; result.n = sU.w;
+    result.U = U; result.S0 = S0; result.F = F; result.evs = evs; result.y = y; result.n = sU.w; result.m = m;
     return result;
 }
