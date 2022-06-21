@@ -180,10 +180,19 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
         }
     }
 
+    // U symmetric
+    matrix sU = newMatrix(num, num);
+    for(int y = 0; y < num; y++) {
+        for(int x = y + 1; x < num; x++) sU.data[y * num + x] = (U.data[y * num + x] + U.data[x * num + y]) / 2.0d;
+    }
+
     //Final clustering. Find connected components on sU with Tarjan's algorithm
     int * y = malloc(sU.w * sizeof(int));
     int clusterNum = connectedComp(sU, y);
     if(clusterNum != c) printf("Couldn't find requested cluster number (%d). Got %d clusters\n", c, clusterNum);
+    freeMatrix(sU);
+
+    //TODO: Free everything
 
     gmc_result result;
     result.U = U; result.S0 = S0; result.F = F; result.evs = evs; result.y = y; result.n = sU.w;
