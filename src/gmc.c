@@ -72,7 +72,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
                 if(ed[v].data[y * num + x] < heapMax(h)) replace(&h, ed[v].data + y * num + x);
             }
             idxx[v * num + y] = h;
-            sums[v * num + y] = 0.0d;
+            sums[v * num + y] = -heapMin(h);
             for(int x = 1; x < PN + 1; x++) sums[v * num + y] += *h.data[x];
         }
     }
@@ -81,19 +81,25 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     // Main loop
     for(int it = 0; it < NITER; it++) {
         for(int v = 0; v < m; v++) {
+            memset(S0[v].data, 0x00, num * num * sizeof(double));
             for(int y = 0; y < num; y++) {
                 heap h = idxx[v * num + y];
-                void* offsetU = U.data - ed[v].data;
+                long long offsetU = U.data - ed[v].data;
+                long long offsetS = S0[v].data - ed[v].data;
                 double weight = w.data[v] *  2.0d;
 
-                double sumU = 0.0d;
-                for(int x = 0; x < PN + 1; x++) sumU += *(offsetU + h.data[x]);
+                double sumU = -*(offsetU + h.min);
+                for(int x = 1; x < PN + 1; x++) sumU += *(offsetU + h.data[x]);
 
                 double numerator = heapMax(h) - *(offsetU + h.data[0]) * weight;
                 double denominator1 = PN * heapMax(h) - sums[v * num + y];
                 double denominator2 = (sumU - *(offsetU + h.data[0]) * PN) * weight;
 
-                //TODO: Set each S0 value. Non indexed positions should be set to 0
+                for(int x = 0; x < PN + 1; x++) {
+                    if(h.data[x] == h.min) continue;
+                    double r = (numerator - *h.data[x] - weight * *(offsetU + h.data[x])) / (denominator1 + denominator2 + EPS);
+                    if(r > 0.0d) *(offsetS + h.data[x]) = r;
+                }
             }
         }
 
