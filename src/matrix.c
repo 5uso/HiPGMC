@@ -26,7 +26,7 @@ double * getRow(matrix m, uint j) {
 
 void print(matrix m) {
     for(int j = 0; j < m.h; j++) {
-        for(int i = 0; i < m.w; i++) printf("%lf ", get(m, i, j));
+        for(int i = 0; i < m.w; i++) printf("%10.4lf", get(m, i, j));
         printf("\n");
     }
 }
