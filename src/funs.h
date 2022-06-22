@@ -12,7 +12,7 @@
 matrix sqrDist(matrix m);
 matrix initSIG(matrix x, uint k);
 matrix updateU(matrix q);
-void updateF(matrix F, matrix U, double * ev, uint c);
+matrix updateF(matrix F, matrix U, double * ev, uint c);
 int connectedComp(matrix m, int * y);
 
 #endif

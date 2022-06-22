@@ -52,7 +52,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     matrix F = newMatrix(num, num);
     matrix F_old = newMatrix(num, num);
     matrix evs = newMatrix(num, NITER + 1);
-    updateF(F, U, evs.data, c);
+    F = updateF(F, U, evs.data, c);
 
     //Initialize w to m uniform (All views start with the same weight)
     double wI = 1.0 / m;
@@ -117,7 +117,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
         freeMatrix(US);
 
         //Update U
-        matrix dist = sqrDist(F); //TODO: This actually needs F to be transposed. Create a function sqrDistT?
+        matrix dist = sqrDist(F); //F is transposed, since LAPACK returns it in column major
         bool * idx = malloc(num * sizeof(bool));
         for(int y = 0; y < num; y++) {
             int qw = 0;
@@ -169,7 +169,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
         F_old = F;
         F = temp;
         double * ev = evs.data + num * it;
-        updateF(F, U, ev, c);
+        F = updateF(F, U, ev, c);
 
         //Update lambda
         double fn = 0.0d;

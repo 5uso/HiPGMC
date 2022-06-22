@@ -107,19 +107,21 @@ matrix updateU(matrix q) { //Height of q is m
     return q;
 }
 
-void updateF(matrix F, matrix U, double * ev, uint c) {
+matrix updateF(matrix F, matrix U, double * ev, uint c) {
     for(int y = 0; y < U.w; y++) {
         F.data[y * F.w + y] = -U.data[y * U.w + y];
-        for(int i = 0; i < y; i++) F.data[y * F.w + y] -= F.data[i * U.w + y];
+        for(int i = 0; i < y; i++) F.data[y * F.w + y] -= F.data[y * U.w + i];
         for(int x = y + 1; x < U.w; x++) {
             double t = -(U.data[y * U.w + x] + U.data[x * U.w + y]) / 2.0d;
-            F.data[y * F.w + x] = t;
+            F.data[x * F.w + y] = t;
             F.data[y * F.w + y] -= t;
         }
     }
 
-    //Eigenvalues go in ascending order inside w, eigenvectors are returned inside l. w is an array sized as a row of l.
-    LAPACKE_dsyev(LAPACK_COL_MAJOR, 'V', 'U', F.w, F.data, F.w, ev); //TODO: Row major only outputs the upper triangular of eigenvectors?
+    //Eigenvalues go in ascending order inside ev, eigenvectors are returned inside F
+    LAPACKE_dsyev(LAPACK_COL_MAJOR, 'V', 'U', F.w, F.data, F.w, ev);
+    F.h = c;
+    return F;
 }
 
 void __compTraversal(int node, matrix m, int * y, int cluster) {
