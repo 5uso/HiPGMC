@@ -108,14 +108,14 @@ matrix updateU(matrix q) { //Height of q is m
 }
 
 void updateF(matrix F, matrix U, double * ev, uint c) {
-    for(int x = 0; x < U.w; x++) {
-        double sum = 0.0d;
-        for(int y = 0; y <= x; y++) {
+    for(int y = 0; y < U.w; y++) {
+        F.data[y * F.w + y] = -U.data[y * U.w + y];
+        for(int i = 0; i < y; i++) F.data[y * F.w + y] -= F.data[i * U.w + y];
+        for(int x = y + 1; x < U.w; x++) {
             double t = -(U.data[y * U.w + x] + U.data[x * U.w + y]) / 2.0d;
             F.data[y * F.w + x] = t;
-            sum += t;
+            F.data[y * F.w + y] -= t;
         }
-        F.data[x * F.w + x] -= sum;
     }
 
     //Eigenvalues go in ascending order inside w, eigenvectors are returned inside l. w is an array sized as a row of l.
