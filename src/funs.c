@@ -125,7 +125,7 @@ void updateF(matrix F, matrix U, double * ev, uint c) {
 void __compTraversal(int node, matrix m, int * y, int cluster) {
     y[node] = cluster;
     for(int i = node + 1; i < m.w; i++) {
-        if(m.data[node * m.w + i] != 0.0d) __compTraversal(i, m, y, cluster);
+        if(m.data[node * m.w + i] != 0.0d && y[i] != -1) __compTraversal(i, m, y, cluster);
     }
 }
 
