@@ -77,6 +77,8 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
         }
     }
     //After this is done we no longer need X, maybe free it. (Maybe not since it's an input)
+    print(ed[0]);
+    gmc_result r; return r;
 
     // Main loop
     for(int it = 0; it < NITER; it++) {

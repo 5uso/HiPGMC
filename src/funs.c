@@ -4,10 +4,10 @@ matrix sqrDist(matrix m) {
     //Compute sum of squared columns vector
     double * ssc = malloc(m.w * sizeof(double));
     for(uint i = 0; i < m.w; i++) {
-        double a = get(m, i, 0);
+        double a = m.data[i];
         ssc[i] = a * a;
         for(uint j = 1; j < m.h; j++) {
-            a = get(m, i, j);
+            a = m.data[j * m.w + i];
             ssc[i] += a * a;
         }
     }
@@ -21,12 +21,12 @@ matrix sqrDist(matrix m) {
     for(uint i = 0; i < m.w; i++) {
         for(uint j = 0; j < m.w; j++) {
             if(i == j) {
-                set(d, i, j, 0.0d);
+                d.data[j * d.w + i] = d.data[i * d.w + j] = 0.0d;
                 continue;
             }
 
-            double mul = i < j ? get(mt, j, i) : get(mt, i, j);
-            set(d, i, j, ssc[i] + ssc[j] - 2.0d * mul);
+            double mul = i < j ? mt.data[i * mt.w + j] : mt.data[j * mt.w + i];
+            d.data[j * d.w + i] = d.data[i * d.w + j] = ssc[i] + ssc[j] - 2.0d * mul;
         }
     }
 
@@ -39,10 +39,10 @@ matrix initSIG(matrix x, uint k) {
     matrix d = sqrDist(x);
 
     for(int j = 0; j < x.w; j++) {
-        heap h = newHeap(getRow(d, j), k + 2);
+        heap h = newHeap(d.data + j * d.w, k + 2);
         for(int i = k + 2; i < x.w; i++) {
-            if(get(d, i, j) < heapMax(h)) replace(&h, d.data + i + j * x.w);
-            else set(d, i, j, 0.0d);
+            if(d.data[j * d.w + i] < heapMax(h)) replace(&h, d.data + i + j * x.w);
+            else d.data[j * d.w + i] = 0.0d;
         }
 
         double a = heapMax(h);

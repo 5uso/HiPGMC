@@ -12,21 +12,9 @@ void freeMatrix(matrix m) {
     free(m.data);
 }
 
-double get(matrix m, uint i, uint j) { // i = x axis, j = y axis
-    return m.data[j * m.w + i];
-}
-
-void set(matrix m, uint i, uint j, double val) {
-    m.data[j * m.w + i] = val;
-}
-
-double * getRow(matrix m, uint j) {
-    return m.data + j * m.w;
-}
-
 void print(matrix m) {
     for(int j = 0; j < m.h; j++) {
-        for(int i = 0; i < m.w; i++) printf("%10.4lf", get(m, i, j));
+        for(int i = 0; i < m.w; i++) printf("%10.4lf", m.data[j * m.w + i]);
         printf("\n");
     }
 }
