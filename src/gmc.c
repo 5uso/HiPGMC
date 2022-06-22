@@ -182,7 +182,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
             F_old = F;
             F = temp;
         } else {
-            printf("Iteration %d: λ=%lf\n", it, lambda);
+            printf("Iteration %d: λ=%lf\n", it + 1, lambda);
             evs.h = it + 2;
             break;
         }
