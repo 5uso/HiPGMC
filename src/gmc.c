@@ -31,7 +31,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
 
     //U starts as average of SIG matrices
     matrix U = newMatrix(num, num);
-    memcpy(U.data, S0[0].data, num * num);
+    memcpy(U.data, S0[0].data, num * num * sizeof(double));
     for(int v = 1; v < m; v++) {
         for(int y = 0; y < num; y++) {
             for(int x = 0; x < num; x++) U.data[y * num + x] += S0[v].data[y * num + x];
@@ -106,7 +106,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
         //Update w
         matrix US = newMatrix(num, num);
         for(int v = 0; v < m; v++) {
-            memcpy(US.data, U.data, num * num);
+            memcpy(US.data, U.data, num * num * sizeof(double));
             for(int y = 0; y < num; y++) {
                 for(int x = 0; x < num; x++) US.data[y * num + x] -= S0[v].data[y * num + x];
             }
