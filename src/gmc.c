@@ -163,6 +163,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
             freeMatrix(q);
         }
         free(idx);
+        freeMatrix(dist);
 
         //Update matrix of eigenvectors (F), as well as eigenvalues
         matrix temp = F_old;
@@ -198,9 +199,15 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     int * y = malloc(sU.w * sizeof(int));
     int clusterNum = connectedComp(sU, y);
     if(clusterNum != c) printf("Couldn't find requested cluster number (%d). Got %d clusters\n", c, clusterNum);
-    freeMatrix(sU);
 
-    //TODO: Free everything
+    freeMatrix(sU);
+    freeMatrix(F_old);
+    freeMatrix(w);
+    for(int i = 0; i < m; i++) freeMatrix(ed[i]);
+    free(ed);
+    for(int i = 0; i < m * num; i++) freeHeap(idxx[i]);
+    free(idxx);
+    free(sums);
 
     gmc_result result;
     result.U = U; result.S0 = S0; result.F = F; result.evs = evs; result.y = y; result.n = sU.w; result.m = m;
