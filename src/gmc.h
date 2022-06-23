@@ -17,6 +17,7 @@ typedef struct gmc_result {
 } gmc_result;
 
 gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize);
+void free_gmc_result(gmc_result r);
 
 #define NITER 20
 #define ZR 10e-11

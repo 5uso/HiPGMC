@@ -213,3 +213,12 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     result.U = U; result.S0 = S0; result.F = F; result.evs = evs; result.y = y; result.n = sU.w; result.m = m;
     return result;
 }
+
+void free_gmc_result(gmc_result r) {
+    freeMatrix(r.U);
+    for(int i = 0; i < r.m; i++) freeMatrix(r.S0[i]);
+    free(r.S0);
+    freeMatrix(r.F);
+    freeMatrix(r.evs);
+    free(r.y);
+}
