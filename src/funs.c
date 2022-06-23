@@ -144,9 +144,7 @@ int connectedComp(matrix m, int * y) {
     int c = 0;
     for(int i = m.w - 1; i >= 0; i--) {
         if(i == y[i]) y[i] = c++;
-        else {
-            y[i] = y[__mergeComp(y, y[i])];
-        }
+        else y[i] = y[__mergeComp(y, y[i])];
     }
 
     return c;
