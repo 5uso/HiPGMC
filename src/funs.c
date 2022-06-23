@@ -127,21 +127,25 @@ matrix updateF(matrix F, matrix U, double * ev, uint c) {
     return F;
 }
 
-void __compTraversal(int node, matrix m, int * y, int cluster) {
-    y[node] = cluster;
-    for(int i = node + 1; i < m.w; i++) {
-        if(m.data[node * m.w + i] != 0.0d && y[i] == -1) __compTraversal(i, m, y, cluster);
-    }
+int __mergeComp(int * p, int c) {
+    while(p[c] > c) c = p[c];
+    return c;
 }
 
 int connectedComp(matrix m, int * y) {
-    memset(y, 0xFF, m.w * sizeof(int));
+    for(int i = 0; i < m.w; i++) y[i] = i;
+    
+    for(int j = 0; j < m.w; j++) {
+        for(int x = j + 1; x < m.w; x++) {
+            if(m.data[j * m.w + x] != 0.0d) y[__mergeComp(y, j)] = __mergeComp(y, x);
+        }
+    }
 
     int c = 0;
-    for(int i = 0; i < m.w; i++) {
-        if(y[i] == -1) {
-            __compTraversal(i, m, y, c);
-            c++;
+    for(int i = m.w - 1; i >= 0; i--) {
+        if(i == y[i]) y[i] = c++;
+        else {
+            y[i] = y[__mergeComp(y, y[i])];
         }
     }
 
