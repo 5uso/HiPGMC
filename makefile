@@ -1,4 +1,5 @@
-FLAGS = -Wall -lblas -llapack -llapacke -Ofast
+FLAGS = -Wall -Ofast
+LINK = -llapack -lblas -llapacke -lcblas -lm -ldl
 SUBDIR = bin/
 SRC = src/
 OUT = out/
@@ -11,8 +12,12 @@ OBJECTS = $(addprefix $(SUBDIR),$(SOURCES:.c=.o))
 test: $(OBJECTS)
 	@printf "\n\n$@: "
 	@mkdir -p $(OUT)
-	gcc $(OBJECTS) $(FLAGS) -o $(OUT)test
+	gcc $(OBJECTS) $(FLAGS) $(LINK) -o $(OUT)test
 	$(SUCCESS)
+
+clean:
+	rm -r ./bin
+	rm -r ./out
 
 $(SUBDIR)%.o: %.c
 	@printf "\n$(notdir $@): "

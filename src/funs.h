@@ -3,9 +3,9 @@
 
 #include "matrix.h"
 #include "heap.h"
+#include <math.h>
 #include <cblas.h>
 #include <lapacke.h>
-#include <math.h>
 
 #define EPS 2.2204e-16
 
