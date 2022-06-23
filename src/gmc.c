@@ -67,18 +67,16 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
         ed[v] = sqrDist(X[v]);
         //TODO: Check -> Store sort into idxx (heap, since the loop uses lowest values?)
         for(int y = 0; y < num; y++) {
-            heap h = newHeap(ed[v].data + y * num, PN + 1);
-            for(int x = PN + 1; x < num; x++) {
+            heap h = newHeap(ed[v].data + y * num, PN + 2);
+            for(int x = PN + 2; x < num; x++) {
                 if(ed[v].data[y * num + x] < heapMax(h)) replace(&h, ed[v].data + y * num + x);
             }
             idxx[v * num + y] = h;
             sums[v * num + y] = -heapMin(h);
-            for(int x = 1; x < PN + 1; x++) sums[v * num + y] += *h.data[x];
+            for(int x = 1; x < PN + 2; x++) sums[v * num + y] += *h.data[x];
         }
     }
     //After this is done we no longer need X, maybe free it. (Maybe not since it's an input)
-    print(ed[0]);
-    gmc_result r; return r;
 
     // Main loop
     for(int it = 0; it < NITER; it++) {
@@ -91,13 +89,13 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
                 double weight = w.data[v] *  2.0d;
 
                 double sumU = -*(offsetU + h.min);
-                for(int x = 1; x < PN + 1; x++) sumU += *(offsetU + h.data[x]);
+                for(int x = 1; x < PN + 2; x++) sumU += *(offsetU + h.data[x]);
 
                 double numerator = heapMax(h) - *(offsetU + h.data[0]) * weight;
                 double denominator1 = PN * heapMax(h) - sums[v * num + y];
                 double denominator2 = (sumU - *(offsetU + h.data[0]) * PN) * weight;
 
-                for(int x = 0; x < PN + 1; x++) {
+                for(int x = 0; x < PN + 2; x++) {
                     if(h.data[x] == h.min) continue;
                     double r = (numerator - *h.data[x] - weight * *(offsetU + h.data[x])) / (denominator1 + denominator2 + EPS);
                     if(r > 0.0d) *(offsetS + h.data[x]) = r;
