@@ -45,7 +45,6 @@ double heapMin(heap h) {
 }
 
 void replace(heap * h, double * val) {
-    *h->data[0] = 0.0;
     h->data[0] = val;
     sift_down(*h, 0);
     if(*val < *h->min) h->min = val;

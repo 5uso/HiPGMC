@@ -41,7 +41,10 @@ matrix initSIG(matrix x, uint k) {
     for(int j = 0; j < x.w; j++) {
         heap h = newHeap(d.data + j * d.w, k + 2);
         for(int i = k + 2; i < x.w; i++) {
-            if(d.data[j * d.w + i] < heapMax(h)) replace(&h, d.data + i + j * x.w);
+            if(d.data[j * d.w + i] < heapMax(h)) {
+                *h.data[0] = 0.0;
+                replace(&h, d.data + i + j * x.w);
+            }
             else d.data[j * d.w + i] = 0.0d;
         }
 
