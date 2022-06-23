@@ -97,7 +97,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
 
                 for(int x = 0; x < PN + 2; x++) {
                     if(h.data[x] == h.min) continue;
-                    double r = (numerator - *h.data[x] - weight * *(offsetU + h.data[x])) / (denominator1 + denominator2 + EPS);
+                    double r = (numerator - *h.data[x] + weight * *(offsetU + h.data[x])) / (denominator1 + denominator2 + EPS);
                     if(r > 0.0d) *(offsetS + h.data[x]) = r;
                 }
             }
