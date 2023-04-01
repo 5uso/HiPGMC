@@ -47,6 +47,118 @@ matrix __gmc_init_u(matrix * S0, uint m, uint num) {
     return U;
 }
 
+bool __gmc_main_loop(int it, matrix * S0, matrix U, matrix w, matrix * F, matrix * F_old, matrix evs, uint m, uint c, uint num,
+                     matrix * ed, heap * idxx, double * sums, double * lambda) {
+    for(int v = 0; v < m; v++) {
+        memset(S0[v].data, 0x00, num * num * sizeof(double));
+        for(int y = 0; y < num; y++) {
+            heap h = idxx[v * num + y];
+            long long offsetU = U.data - ed[v].data;
+            long long offsetS = S0[v].data - ed[v].data;
+            double weight = w.data[v] *  2.0d;
+
+            double sumU = -*(offsetU + h.min);
+            for(int x = 1; x < PN + 2; x++) sumU += *(offsetU + h.data[x]);
+
+            double numerator = heap_max(h) - *(offsetU + h.data[0]) * weight;
+            double denominator1 = PN * heap_max(h) - sums[v * num + y];
+            double denominator2 = (sumU - *(offsetU + h.data[0]) * PN) * weight;
+
+            for(int x = 0; x < PN + 2; x++) {
+                if(h.data[x] == h.min) continue;
+                double r = (numerator - *h.data[x] + weight * *(offsetU + h.data[x])) / (denominator1 + denominator2 + EPS);
+                if(r > 0.0d) *(offsetS + h.data[x]) = r;
+            }
+        }
+    }
+
+    // Update w
+    matrix US = new_matrix(num, num);
+    for(int v = 0; v < m; v++) {
+        memcpy(US.data, U.data, num * num * sizeof(double));
+        for(int y = 0; y < num; y++) {
+            for(int x = 0; x < num; x++) US.data[y * num + x] -= S0[v].data[y * num + x];
+        }
+
+        double distUS = LAPACKE_dlange(LAPACK_COL_MAJOR, 'F', num, num, US.data, num);
+        w.data[v] = 0.5d / (distUS + EPS);
+    }
+    free_matrix(US);
+
+    // Update U
+    matrix dist = sqr_dist(*F); // F is transposed, since LAPACK returns it in column major
+    bool * idx = malloc(num * sizeof(bool));
+    for(int y = 0; y < num; y++) {
+        int qw = 0;
+        #ifdef IS_LOCAL
+            for(int x = 0; x < num; x++) {
+                idx[x] = (S0[0].data[y * num + x] > 0);
+                qw += idx[x];
+            }
+            for(int v = 1; v < m; v++) {
+                for(int x = 0; x < num; x++) {
+                    qw -= idx[x];
+                    idx[x] |= (S0[v].data[y * num + x] > 0);
+                    qw += idx[x];
+                }
+            }
+        #else
+            memset(idx, 0x00, num * sizeof(bool));
+            qw = num;
+        #endif
+        matrix q = new_matrix(qw, m);
+        for(int x = 0, i = 0; x < num; x++) {
+            if(idx[x]) {
+                q.data[i] = *lambda * dist.data[y * num + x] / (double) m * -0.5d;
+                i++;
+            } 
+        }
+        for(int v = m - 1; v >= 0; v--) {
+            for(int x = 0, i = 0; x < num; x++) {
+                if(idx[x]) {
+                    q.data[v * qw + i] = q.data[i] / w.data[v] + S0[v].data[y * num + x];
+                    i++;
+                }
+            }
+        }
+        
+        q = update_u(q);
+        for(int x = 0, i = 0; x < num; x++) {
+            if(idx[x]) {
+                U.data[y * num + x] = q.data[i];
+                i++;
+            } else U.data[y * num + x] = 0.0d;
+        }
+        free_matrix(q);
+    }
+    free(idx);
+    free_matrix(dist);
+
+    // Update matrix of eigenvectors (F), as well as eigenvalues
+    matrix temp = *F_old;
+    *F_old = *F;
+    *F = temp;
+    double * ev = evs.data + num * it;
+    *F = update_f(*F, U, ev, c);
+
+    // Update lambda
+    double fn = 0.0d;
+    for(int i = 0; i < c; i++) fn += ev[i];
+    if(fn > ZR) {
+        *lambda *= 2.0d;
+    } else if(fn + ev[c] < ZR) {
+        *lambda /= 2.0d;
+        temp = *F_old;
+        *F_old = *F;
+        *F = temp;
+    } else {
+        evs.h = it + 2;
+        return true;
+    }
+
+    return false;
+}
+
 gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     uint num = X[0].w;
 
@@ -92,112 +204,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     // Main loop
     int it;
     for(it = 0; it < NITER; it++) {
-        for(int v = 0; v < m; v++) {
-            memset(S0[v].data, 0x00, num * num * sizeof(double));
-            for(int y = 0; y < num; y++) {
-                heap h = idxx[v * num + y];
-                long long offsetU = U.data - ed[v].data;
-                long long offsetS = S0[v].data - ed[v].data;
-                double weight = w.data[v] *  2.0d;
-
-                double sumU = -*(offsetU + h.min);
-                for(int x = 1; x < PN + 2; x++) sumU += *(offsetU + h.data[x]);
-
-                double numerator = heap_max(h) - *(offsetU + h.data[0]) * weight;
-                double denominator1 = PN * heap_max(h) - sums[v * num + y];
-                double denominator2 = (sumU - *(offsetU + h.data[0]) * PN) * weight;
-
-                for(int x = 0; x < PN + 2; x++) {
-                    if(h.data[x] == h.min) continue;
-                    double r = (numerator - *h.data[x] + weight * *(offsetU + h.data[x])) / (denominator1 + denominator2 + EPS);
-                    if(r > 0.0d) *(offsetS + h.data[x]) = r;
-                }
-            }
-        }
-
-        // Update w
-        matrix US = new_matrix(num, num);
-        for(int v = 0; v < m; v++) {
-            memcpy(US.data, U.data, num * num * sizeof(double));
-            for(int y = 0; y < num; y++) {
-                for(int x = 0; x < num; x++) US.data[y * num + x] -= S0[v].data[y * num + x];
-            }
-
-            double distUS = LAPACKE_dlange(LAPACK_COL_MAJOR, 'F', num, num, US.data, num);
-            w.data[v] = 0.5d / (distUS + EPS);
-        }
-        free_matrix(US);
-
-        // Update U
-        matrix dist = sqr_dist(F); // F is transposed, since LAPACK returns it in column major
-        bool * idx = malloc(num * sizeof(bool));
-        for(int y = 0; y < num; y++) {
-            int qw = 0;
-            #ifdef IS_LOCAL
-                for(int x = 0; x < num; x++) {
-                    idx[x] = (S0[0].data[y * num + x] > 0);
-                    qw += idx[x];
-                }
-                for(int v = 1; v < m; v++) {
-                    for(int x = 0; x < num; x++) {
-                        qw -= idx[x];
-                        idx[x] |= (S0[v].data[y * num + x] > 0);
-                        qw += idx[x];
-                    }
-                }
-            #else
-                memset(idx, 0x00, num * sizeof(bool));
-                qw = num;
-            #endif
-            matrix q = new_matrix(qw, m);
-            for(int x = 0, i = 0; x < num; x++) {
-                if(idx[x]) {
-                    q.data[i] = lambda * dist.data[y * num + x] / (double) m * -0.5d;
-                    i++;
-                } 
-            }
-            for(int v = m - 1; v >= 0; v--) {
-                for(int x = 0, i = 0; x < num; x++) {
-                    if(idx[x]) {
-                        q.data[v * qw + i] = q.data[i] / w.data[v] + S0[v].data[y * num + x];
-                        i++;
-                    }
-                }
-            }
-            
-            q = update_u(q);
-            for(int x = 0, i = 0; x < num; x++) {
-                if(idx[x]) {
-                    U.data[y * num + x] = q.data[i];
-                    i++;
-                } else U.data[y * num + x] = 0.0d;
-            }
-            free_matrix(q);
-        }
-        free(idx);
-        free_matrix(dist);
-
-        // Update matrix of eigenvectors (F), as well as eigenvalues
-        matrix temp = F_old;
-        F_old = F;
-        F = temp;
-        double * ev = evs.data + num * it;
-        F = update_f(F, U, ev, c);
-
-        // Update lambda
-        double fn = 0.0d;
-        for(int i = 0; i < c; i++) fn += ev[i];
-        if(fn > ZR) {
-            lambda *= 2.0d;
-        } else if(fn + ev[c] < ZR) {
-            lambda /= 2.0d;
-            temp = F_old;
-            F_old = F;
-            F = temp;
-        } else {
-            evs.h = it + 2;
-            break;
-        }
+       if(__gmc_main_loop(it, S0, U, w, &F, &F_old, evs, m, c, num, ed, idxx, sums, &lambda)) break;
     }
 
     // U symmetric
@@ -220,6 +227,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     free(idxx);
     free(ed);
 
+    // Build output struct
     gmc_result result;
     result.U = U; result.S0 = S0; result.F = F; result.evs = evs; result.y = y; result.n = sU.w; result.m = m;
     result.cluster_num = cluster_num; result.iterations = it + 1; result.lambda = lambda;
