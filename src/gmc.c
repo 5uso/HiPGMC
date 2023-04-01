@@ -88,24 +88,19 @@ void __gmc_update_w(matrix * S0, matrix U, matrix w, uint m, uint num) {
     free_matrix(US);
 }
 
-bool __gmc_main_loop(int it, matrix * S0, matrix U, matrix w, matrix * F, matrix * F_old, matrix evs, uint m, uint c, uint num,
-                     matrix * ed, heap * idxx, double * sums, double * lambda) {
-    // Update S0
-    __gmc_update_s0(S0, U, w, m, num, ed, idxx, sums);
-
-    // Update w
-    __gmc_update_w(S0, U, w, m, num);
-
-    // Update U
+void __gmc_update_u(matrix * S0, matrix U, matrix w, matrix * F, uint m, uint num, double * lambda) {
     matrix dist = sqr_dist(*F); // F is transposed, since LAPACK returns it in column major
     bool * idx = malloc(num * sizeof(bool));
+
     for(int y = 0; y < num; y++) {
         int qw = 0;
+
         #ifdef IS_LOCAL
             for(int x = 0; x < num; x++) {
                 idx[x] = (S0[0].data[y * num + x] > 0);
                 qw += idx[x];
             }
+
             for(int v = 1; v < m; v++) {
                 for(int x = 0; x < num; x++) {
                     qw -= idx[x];
@@ -117,6 +112,7 @@ bool __gmc_main_loop(int it, matrix * S0, matrix U, matrix w, matrix * F, matrix
             memset(idx, 0x00, num * sizeof(bool));
             qw = num;
         #endif
+
         matrix q = new_matrix(qw, m);
         for(int x = 0, i = 0; x < num; x++) {
             if(idx[x]) {
@@ -124,6 +120,7 @@ bool __gmc_main_loop(int it, matrix * S0, matrix U, matrix w, matrix * F, matrix
                 i++;
             } 
         }
+
         for(int v = m - 1; v >= 0; v--) {
             for(int x = 0, i = 0; x < num; x++) {
                 if(idx[x]) {
@@ -140,10 +137,24 @@ bool __gmc_main_loop(int it, matrix * S0, matrix U, matrix w, matrix * F, matrix
                 i++;
             } else U.data[y * num + x] = 0.0d;
         }
+
         free_matrix(q);
     }
+
     free(idx);
     free_matrix(dist);
+}
+
+bool __gmc_main_loop(int it, matrix * S0, matrix U, matrix w, matrix * F, matrix * F_old, matrix evs, uint m, uint c, uint num,
+                     matrix * ed, heap * idxx, double * sums, double * lambda) {
+    // Update S0
+    __gmc_update_s0(S0, U, w, m, num, ed, idxx, sums);
+
+    // Update w
+    __gmc_update_w(S0, U, w, m, num);
+
+    // Update U
+    __gmc_update_u(S0, U, w, F, m, num, lambda);
 
     // Update matrix of eigenvectors (F), as well as eigenvalues
     matrix temp = *F_old;
