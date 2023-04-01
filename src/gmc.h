@@ -14,6 +14,9 @@ typedef struct gmc_result {
     int * y;
     int n;
     int m;
+    int cluster_num;
+    int iterations;
+    double lambda;
 } gmc_result;
 
 gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize);

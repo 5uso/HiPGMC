@@ -90,7 +90,8 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     }
 
     // Main loop
-    for(int it = 0; it < NITER; it++) {
+    int it;
+    for(it = 0; it < NITER; it++) {
         for(int v = 0; v < m; v++) {
             memset(S0[v].data, 0x00, num * num * sizeof(double));
             for(int y = 0; y < num; y++) {
@@ -194,7 +195,6 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
             F_old = F;
             F = temp;
         } else {
-            printf("Iteration %d: λ=%lf\n", it + 1, lambda);
             evs.h = it + 2;
             break;
         }
@@ -208,8 +208,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
 
     //Final clustering. Find connected components on sU with Tarjan's algorithm
     int * y = malloc(sU.w * sizeof(int));
-    int clusterNum = connected_comp(sU, y);
-    if(clusterNum != c) printf("Couldn't find requested cluster number (%d). Got %d clusters\n", c, clusterNum);
+    int cluster_num = connected_comp(sU, y);
 
     free_matrix(sU);
     free_matrix(F_old);
@@ -222,6 +221,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
 
     gmc_result result;
     result.U = U; result.S0 = S0; result.F = F; result.evs = evs; result.y = y; result.n = sU.w; result.m = m;
+    result.cluster_num = cluster_num; result.iterations = it + 1; result.lambda = lambda;
     return result;
 }
 

@@ -22,6 +22,8 @@ int main(int argc, char *argv[]) {
     gmc_result r = gmc(data, 2, 2, 1.0d, 0);
 
     gettimeofday(&end, 0);
+    if(r.cluster_num != 2) printf("Couldn't find requested cluster number (%d). Got %d clusters\n", 2, r.cluster_num);
+    printf("Iteration %d: λ=%lf\n", r.iterations, r.lambda);
     printf("Time measured: %.3f seconds.\n", end.tv_sec - begin.tv_sec + (end.tv_usec - begin.tv_usec) * 1e-6);
     
     //for(int i = 0; i < r.n; i++) printf("%d ", r.y[i]);
