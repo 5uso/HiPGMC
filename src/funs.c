@@ -1,7 +1,7 @@
 #include "funs.h"
 
 matrix sqr_dist(matrix m) {
-    //Compute sum of squared columns vector
+    // Compute sum of squared columns vector
     double * ssc = malloc(m.w * sizeof(double));
     for(uint i = 0; i < m.w; i++) {
         double a = m.data[i];
@@ -12,11 +12,11 @@ matrix sqr_dist(matrix m) {
         }
     }
 
-    //Compute multiplication by transpose (upper triangular only)
+    // Compute multiplication by transpose (upper triangular only)
     matrix mt = new_matrix(m.w, m.w);
     cblas_dsyrk(CblasRowMajor, CblasUpper, CblasTrans, m.w, m.h, 1.0, m.data, m.w, 0.0, mt.data, m.w);
 
-    //Compute final matrix
+    // Compute final matrix
     matrix d = new_matrix(m.w, m.w);
     for(uint i = 0; i < m.w; i++) {
         for(uint j = 0; j < m.w; j++) {
@@ -65,7 +65,7 @@ matrix init_sig(matrix x, uint k) {
     return d;
 }
 
-matrix update_u(matrix q) { //Height of q is m
+matrix update_u(matrix q) { // Height of q is m
     for(int j = 1; j < q.h; j++) {
         for(int i = 0; i < q.w; i++) q.data[i] += q.data[j * q.w + i];
     }
@@ -121,7 +121,7 @@ matrix update_f(matrix F, matrix U, double * ev, uint c) {
         }
     }
 
-    //Eigenvalues go in ascending order inside ev, eigenvectors are returned inside F
+    // Eigenvalues go in ascending order inside ev, eigenvectors are returned inside F
     LAPACKE_dsyev(LAPACK_COL_MAJOR, 'V', 'U', F.w, F.data, F.w, ev);
     F.h = c;
     return F;

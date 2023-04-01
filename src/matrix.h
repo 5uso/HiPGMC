@@ -5,8 +5,8 @@
 #include <stdio.h>
 
 typedef struct matrix {
-    uint w; uint h;     //Width & Height
-    double *  data;     //Matrix contents
+    uint w; uint h;     // Width & Height
+    double *  data;     // Matrix contents
 } matrix;
 
 matrix new_matrix(uint w, uint h);

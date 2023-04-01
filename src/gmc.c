@@ -24,7 +24,7 @@ void __gmc_normalize(matrix * X, uint m, uint num) {
 matrix __gmc_init_u(matrix * S0, uint m, uint num) {
     matrix U = new_matrix(num, num);
 
-    //U starts as average of SIG matrices
+    // U starts as average of SIG matrices
     memcpy(U.data, S0[0].data, num * num * sizeof(double));
 
     for(int v = 1; v < m; v++) {
@@ -37,7 +37,7 @@ matrix __gmc_init_u(matrix * S0, uint m, uint num) {
         for(int x = 0; x < num; x++) U.data[y * num + x] /= (double) num;
     }
 
-    //Divide each row of U by its own sum
+    // Divide each row of U by its own sum
     for(int y = 0; y < num; y++) {
         double sum = 0.0d;
         for(int x = 0; x < num; x++) sum += U.data[y * num + x];
@@ -50,34 +50,34 @@ matrix __gmc_init_u(matrix * S0, uint m, uint num) {
 gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     uint num = X[0].w;
 
-    //Normalize data
+    // Normalize data
     if(normalize) __gmc_normalize(X, m, num);
 
-    //Initialize SIG matrices
+    // Initialize SIG matrices
     matrix * S0 = malloc(m * sizeof(matrix));
     for(int v = 0; v < m; v++) S0[v] = init_sig(X[v], PN);
 
-    //U starts as average of SIG matrices
+    // U starts as average of SIG matrices
     matrix U = __gmc_init_u(S0, m, num);
 
-    //Get matrix of eigenvectors (F), as well as eigenvalues
+    // Get matrix of eigenvectors (F), as well as eigenvalues
     matrix F = new_matrix(num, num);
     matrix F_old = new_matrix(num, num);
     matrix evs = new_matrix(num, NITER + 1);
     F = update_f(F, U, evs.data, c);
 
-    //Initialize w to m uniform (All views start with the same weight)
+    // Initialize w to m uniform (All views start with the same weight)
     double wI = 1.0 / m;
     matrix w = new_matrix(m, 1);
     for(int v = 0; v < m; v++) w.data[v] = wI;
 
-    //Used when calculating S0
+    // Used when calculating S0
     matrix * ed = malloc(m * sizeof(matrix));
     heap * idxx = malloc(m * num * sizeof(heap));
     double * sums = malloc(m * num * sizeof(double));
     for(int v = 0; v < m; v++) {
         ed[v] = sqr_dist(X[v]);
-        //TODO: Check -> Store sort into idxx (heap, since the loop uses lowest values?)
+        // TODO: Check -> Store sort into idxx (heap, since the loop uses lowest values?)
         for(int y = 0; y < num; y++) {
             heap h = new_heap(ed[v].data + y * num, PN + 2);
             for(int x = PN + 2; x < num; x++) {
@@ -115,7 +115,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
             }
         }
 
-        //Update w
+        // Update w
         matrix US = new_matrix(num, num);
         for(int v = 0; v < m; v++) {
             memcpy(US.data, U.data, num * num * sizeof(double));
@@ -128,8 +128,8 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
         }
         free_matrix(US);
 
-        //Update U
-        matrix dist = sqr_dist(F); //F is transposed, since LAPACK returns it in column major
+        // Update U
+        matrix dist = sqr_dist(F); // F is transposed, since LAPACK returns it in column major
         bool * idx = malloc(num * sizeof(bool));
         for(int y = 0; y < num; y++) {
             int qw = 0;
@@ -177,14 +177,14 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
         free(idx);
         free_matrix(dist);
 
-        //Update matrix of eigenvectors (F), as well as eigenvalues
+        // Update matrix of eigenvectors (F), as well as eigenvalues
         matrix temp = F_old;
         F_old = F;
         F = temp;
         double * ev = evs.data + num * it;
         F = update_f(F, U, ev, c);
 
-        //Update lambda
+        // Update lambda
         double fn = 0.0d;
         for(int i = 0; i < c; i++) fn += ev[i];
         if(fn > ZR) {
@@ -206,18 +206,19 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
         for(int x = y + 1; x < num; x++) sU.data[y * num + x] = (U.data[y * num + x] + U.data[x * num + y]) / 2.0d;
     }
 
-    //Final clustering. Find connected components on sU with Tarjan's algorithm
+    // Final clustering. Find connected components on sU with Tarjan's algorithm
     int * y = malloc(sU.w * sizeof(int));
     int cluster_num = connected_comp(sU, y);
 
-    free_matrix(sU);
-    free_matrix(F_old);
-    free_matrix(w);
+    // Cleanup
     for(int i = 0; i < m; i++) free_matrix(ed[i]);
-    free(ed);
     for(int i = 0; i < m * num; i++) free_heap(idxx[i]);
-    free(idxx);
+    free_matrix(F_old);
+    free_matrix(sU);
+    free_matrix(w);
     free(sums);
+    free(idxx);
+    free(ed);
 
     gmc_result result;
     result.U = U; result.S0 = S0; result.F = F; result.evs = evs; result.y = y; result.n = sU.w; result.m = m;
