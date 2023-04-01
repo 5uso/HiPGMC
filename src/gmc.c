@@ -1,42 +1,38 @@
 #include "gmc.h"
 
-gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
-    uint num = X[0].w;
+void __gmc_normalize(matrix * X, uint m, uint num) {
+    for(int v = 0; v < m; v++) {
+        for(int y = 0; y < num; y++) {
+            int w = X[v].w;
+            double mean = 0.0d;
+            for(int x = 0; x < w; x++) mean += X[v].data[y * w + x];
+            mean /= (double) w;
 
-    //Normalize data
-    if(normalize) {
-        for(int v = 0; v < m; v++) {
-            for(int y = 0; y < num; y++) {
-                int w = X[v].w;
-                double mean = 0.0d;
-                for(int x = 0; x < w; x++) mean += X[v].data[y * w + x];
-                mean /= (double) w;
-
-                double std = 0.0d;
-                for(int x = 0; x < w; x++) {
-                    double dev = X[v].data[y * w + x] - mean;
-                    std += dev * dev;
-                }
-                std /= (double) w;
-                std = sqrt(std);
-
-                for(int x = 0; x < w; x++) X[v].data[y * w + x] = (X[v].data[y * w + x] - mean) / (std + EPS);
+            double std = 0.0d;
+            for(int x = 0; x < w; x++) {
+                double dev = X[v].data[y * w + x] - mean;
+                std += dev * dev;
             }
+            std /= (double) w;
+            std = sqrt(std);
+
+            for(int x = 0; x < w; x++) X[v].data[y * w + x] = (X[v].data[y * w + x] - mean) / (std + EPS);
         }
     }
+}
 
-    //Initialize SIG matrices
-    matrix * S0 = malloc(m * sizeof(matrix));
-    for(int v = 0; v < m; v++) S0[v] = init_sig(X[v], PN);
+matrix __gmc_init_u(matrix * S0, uint m, uint num) {
+    matrix U = new_matrix(num, num);
 
     //U starts as average of SIG matrices
-    matrix U = new_matrix(num, num);
     memcpy(U.data, S0[0].data, num * num * sizeof(double));
+
     for(int v = 1; v < m; v++) {
         for(int y = 0; y < num; y++) {
             for(int x = 0; x < num; x++) U.data[y * num + x] += S0[v].data[y * num + x];
         }
     }
+
     for(int y = 0; y < num; y++) {
         for(int x = 0; x < num; x++) U.data[y * num + x] /= (double) num;
     }
@@ -47,6 +43,22 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
         for(int x = 0; x < num; x++) sum += U.data[y * num + x];
         for(int x = 0; x < num; x++) U.data[y * num + x] /= sum;
     }
+
+    return U;
+}
+
+gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
+    uint num = X[0].w;
+
+    //Normalize data
+    if(normalize) __gmc_normalize(X, m, num);
+
+    //Initialize SIG matrices
+    matrix * S0 = malloc(m * sizeof(matrix));
+    for(int v = 0; v < m; v++) S0[v] = init_sig(X[v], PN);
+
+    //U starts as average of SIG matrices
+    matrix U = __gmc_init_u(S0, m, num);
 
     //Get matrix of eigenvectors (F), as well as eigenvalues
     matrix F = new_matrix(num, num);
@@ -157,7 +169,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
                 if(idx[x]) {
                     U.data[y * num + x] = q.data[i];
                     i++;
-                }  else U.data[y * num + x] = 0.0d;
+                } else U.data[y * num + x] = 0.0d;
             }
             free_matrix(q);
         }
