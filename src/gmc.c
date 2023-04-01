@@ -72,13 +72,9 @@ void __gmc_update_s0(matrix * S0, matrix U, matrix w, uint m, uint num, matrix *
     }
 }
 
-bool __gmc_main_loop(int it, matrix * S0, matrix U, matrix w, matrix * F, matrix * F_old, matrix evs, uint m, uint c, uint num,
-                     matrix * ed, heap * idxx, double * sums, double * lambda) {
-    // Update S0
-    __gmc_update_s0(S0, U, w, m, num, ed, idxx, sums);
-
-    // Update w
+void __gmc_update_w(matrix * S0, matrix U, matrix w, uint m, uint num) {
     matrix US = new_matrix(num, num);
+
     for(int v = 0; v < m; v++) {
         memcpy(US.data, U.data, num * num * sizeof(double));
         for(int y = 0; y < num; y++) {
@@ -88,7 +84,17 @@ bool __gmc_main_loop(int it, matrix * S0, matrix U, matrix w, matrix * F, matrix
         double distUS = LAPACKE_dlange(LAPACK_COL_MAJOR, 'F', num, num, US.data, num);
         w.data[v] = 0.5d / (distUS + EPS);
     }
+
     free_matrix(US);
+}
+
+bool __gmc_main_loop(int it, matrix * S0, matrix U, matrix w, matrix * F, matrix * F_old, matrix evs, uint m, uint c, uint num,
+                     matrix * ed, heap * idxx, double * sums, double * lambda) {
+    // Update S0
+    __gmc_update_s0(S0, U, w, m, num, ed, idxx, sums);
+
+    // Update w
+    __gmc_update_w(S0, U, w, m, num);
 
     // Update U
     matrix dist = sqr_dist(*F); // F is transposed, since LAPACK returns it in column major
