@@ -30,5 +30,7 @@ int main(int argc, char *argv[]) {
     //printf("\n");
     //print(r.U);
 
+    free_gmc_result(r);
+
     return 0;
 }
