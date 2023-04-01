@@ -26,5 +26,12 @@ void free_gmc_result(gmc_result r);
 #define ZR 10e-11
 #define PN 15
 #define IS_LOCAL 1
+#define INLINE_GMC_INTERNALS 1
+
+#ifdef INLINE_GMC_INTERNALS
+    #define GMC_INTERNAL static inline
+#else
+    #define GMC_INTERNAL static
+#endif
 
 #endif

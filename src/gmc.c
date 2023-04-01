@@ -1,6 +1,6 @@
 #include "gmc.h"
 
-static inline void __gmc_normalize(matrix * X, uint m, uint num) {
+GMC_INTERNAL void __gmc_normalize(matrix * X, uint m, uint num) {
     for(int v = 0; v < m; v++) {
         for(int y = 0; y < num; y++) {
             int w = X[v].w;
@@ -21,7 +21,7 @@ static inline void __gmc_normalize(matrix * X, uint m, uint num) {
     }
 }
 
-static inline matrix __gmc_init_u(matrix * S0, uint m, uint num) {
+GMC_INTERNAL matrix __gmc_init_u(matrix * S0, uint m, uint num) {
     matrix U = new_matrix(num, num);
 
     // U starts as average of SIG matrices
@@ -47,7 +47,7 @@ static inline matrix __gmc_init_u(matrix * S0, uint m, uint num) {
     return U;
 }
 
-static inline void __gmc_update_s0(matrix * S0, matrix U, matrix w, uint m, uint num, matrix * ed, heap * idxx, double * sums) {
+GMC_INTERNAL void __gmc_update_s0(matrix * S0, matrix U, matrix w, uint m, uint num, matrix * ed, heap * idxx, double * sums) {
     for(int v = 0; v < m; v++) {
         memset(S0[v].data, 0x00, num * num * sizeof(double));
         for(int y = 0; y < num; y++) {
@@ -72,7 +72,7 @@ static inline void __gmc_update_s0(matrix * S0, matrix U, matrix w, uint m, uint
     }
 }
 
-static inline void __gmc_update_w(matrix * S0, matrix U, matrix w, uint m, uint num) {
+GMC_INTERNAL void __gmc_update_w(matrix * S0, matrix U, matrix w, uint m, uint num) {
     matrix US = new_matrix(num, num);
 
     for(int v = 0; v < m; v++) {
@@ -88,7 +88,7 @@ static inline void __gmc_update_w(matrix * S0, matrix U, matrix w, uint m, uint 
     free_matrix(US);
 }
 
-static inline void __gmc_update_u(matrix * S0, matrix U, matrix w, matrix * F, uint m, uint num, double * lambda) {
+GMC_INTERNAL void __gmc_update_u(matrix * S0, matrix U, matrix w, matrix * F, uint m, uint num, double * lambda) {
     matrix dist = sqr_dist(*F); // F is transposed, since LAPACK returns it in column major
     bool * idx = malloc(num * sizeof(bool));
 
@@ -145,7 +145,7 @@ static inline void __gmc_update_u(matrix * S0, matrix U, matrix w, matrix * F, u
     free_matrix(dist);
 }
 
-static inline bool __gmc_main_loop(int it, matrix * S0, matrix U, matrix w, matrix * F, matrix * F_old, matrix evs, uint m, uint c, uint num,
+GMC_INTERNAL bool __gmc_main_loop(int it, matrix * S0, matrix U, matrix w, matrix * F, matrix * F_old, matrix evs, uint m, uint c, uint num,
                                    matrix * ed, heap * idxx, double * sums, double * lambda) {
     // Update S0
     __gmc_update_s0(S0, U, w, m, num, ed, idxx, sums);
