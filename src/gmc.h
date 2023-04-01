@@ -31,7 +31,7 @@ void free_gmc_result(gmc_result r);
 #ifdef INLINE_GMC_INTERNALS
     #define GMC_INTERNAL static inline
 #else
-    #define GMC_INTERNAL static
+    #define GMC_INTERNAL __attribute__((noinline))
 #endif
 
 #endif
