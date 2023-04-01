@@ -1,6 +1,6 @@
 #include "funs.h"
 
-matrix sqrDist(matrix m) {
+matrix sqr_dist(matrix m) {
     //Compute sum of squared columns vector
     double * ssc = malloc(m.w * sizeof(double));
     for(uint i = 0; i < m.w; i++) {
@@ -13,11 +13,11 @@ matrix sqrDist(matrix m) {
     }
 
     //Compute multiplication by transpose (upper triangular only)
-    matrix mt = newMatrix(m.w, m.w);
+    matrix mt = new_matrix(m.w, m.w);
     cblas_dsyrk(CblasRowMajor, CblasUpper, CblasTrans, m.w, m.h, 1.0, m.data, m.w, 0.0, mt.data, m.w);
 
     //Compute final matrix
-    matrix d = newMatrix(m.w, m.w);
+    matrix d = new_matrix(m.w, m.w);
     for(uint i = 0; i < m.w; i++) {
         for(uint j = 0; j < m.w; j++) {
             if(i == j) {
@@ -31,24 +31,24 @@ matrix sqrDist(matrix m) {
     }
 
     free(ssc);
-    freeMatrix(mt);
+    free_matrix(mt);
     return d;
 }
 
-matrix initSIG(matrix x, uint k) {
-    matrix d = sqrDist(x);
+matrix init_sig(matrix x, uint k) {
+    matrix d = sqr_dist(x);
 
     for(int j = 0; j < x.w; j++) {
-        heap h = newHeap(d.data + j * d.w, k + 2);
+        heap h = new_heap(d.data + j * d.w, k + 2);
         for(int i = k + 2; i < x.w; i++) {
-            if(d.data[j * d.w + i] < heapMax(h)) {
+            if(d.data[j * d.w + i] < heap_max(h)) {
                 *h.data[0] = 0.0;
                 replace(&h, d.data + i + j * x.w);
             }
             else d.data[j * d.w + i] = 0.0d;
         }
 
-        double a = heapMax(h);
+        double a = heap_max(h);
         double b = a * k + EPS;
         for(int i = 1; i < k + 2; i++) {
             if(h.data[i] != h.min) b -= *h.data[i];
@@ -59,13 +59,13 @@ matrix initSIG(matrix x, uint k) {
             if(h.data[i] != h.min) *h.data[i] = (a - *h.data[i]) / b;
         }
 
-        freeHeap(h);
+        free_heap(h);
     }
 
     return d;
 }
 
-matrix updateU(matrix q) { //Height of q is m
+matrix update_u(matrix q) { //Height of q is m
     for(int j = 1; j < q.h; j++) {
         for(int i = 0; i < q.w; i++) q.data[i] += q.data[j * q.w + i];
     }
@@ -110,7 +110,7 @@ matrix updateU(matrix q) { //Height of q is m
     return q;
 }
 
-matrix updateF(matrix F, matrix U, double * ev, uint c) {
+matrix update_f(matrix F, matrix U, double * ev, uint c) {
     for(int y = 0; y < U.w; y++) {
         F.data[y * F.w + y] = -U.data[y * U.w + y];
         for(int i = 0; i < y; i++) F.data[y * F.w + y] -= F.data[y * U.w + i];
@@ -127,24 +127,24 @@ matrix updateF(matrix F, matrix U, double * ev, uint c) {
     return F;
 }
 
-int __mergeComp(int * p, int c) {
+int __merge_comp(int * p, int c) {
     while(p[c] > c) c = p[c];
     return c;
 }
 
-int connectedComp(matrix m, int * y) {
+int connected_comp(matrix m, int * y) {
     for(int i = 0; i < m.w; i++) y[i] = i;
     
     for(int j = 0; j < m.w; j++) {
         for(int x = j + 1; x < m.w; x++) {
-            if(m.data[j * m.w + x] != 0.0d) y[__mergeComp(y, j)] = __mergeComp(y, x);
+            if(m.data[j * m.w + x] != 0.0d) y[__merge_comp(y, j)] = __merge_comp(y, x);
         }
     }
 
     int c = 0;
     for(int i = m.w - 1; i >= 0; i--) {
         if(i == y[i]) y[i] = c++;
-        else y[i] = y[__mergeComp(y, y[i])];
+        else y[i] = y[__merge_comp(y, y[i])];
     }
 
     return c;

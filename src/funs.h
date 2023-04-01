@@ -9,10 +9,10 @@
 
 #define EPS 2.2204e-16
 
-matrix sqrDist(matrix m);
-matrix initSIG(matrix x, uint k);
-matrix updateU(matrix q);
-matrix updateF(matrix F, matrix U, double * ev, uint c);
-int connectedComp(matrix m, int * y);
+matrix sqr_dist(matrix m);
+matrix init_sig(matrix x, uint k);
+matrix update_u(matrix q);
+matrix update_f(matrix F, matrix U, double * ev, uint c);
+int connected_comp(matrix m, int * y);
 
 #endif

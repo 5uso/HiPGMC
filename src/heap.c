@@ -17,7 +17,7 @@ void sift_down(heap h, uint i) {
     }
 }
 
-heap newHeap(double * data, uint size) {
+heap new_heap(double * data, uint size) {
     heap h;
     h.data = malloc(sizeof(double*) * size);
     h.size = size;
@@ -32,15 +32,15 @@ heap newHeap(double * data, uint size) {
     return h;
 }
 
-void freeHeap(heap h) {
+void free_heap(heap h) {
     free(h.data);
 }
 
-double heapMax(heap h) {
+double heap_max(heap h) {
     return *h.data[0];
 }
 
-double heapMin(heap h) {
+double heap_min(heap h) {
     return *h.min;
 }
 

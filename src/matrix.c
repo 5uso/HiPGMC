@@ -1,6 +1,6 @@
 #include "matrix.h"
 
-matrix newMatrix(uint w, uint h) {
+matrix new_matrix(uint w, uint h) {
     matrix m;
     m.w = w; m.h = h;
     m.data = malloc(w * h * sizeof(double));
@@ -8,7 +8,7 @@ matrix newMatrix(uint w, uint h) {
     return m;
 }
 
-void freeMatrix(matrix m) {
+void free_matrix(matrix m) {
     free(m.data);
 }
 

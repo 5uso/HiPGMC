@@ -9,11 +9,11 @@ typedef struct matrix {
     double *  data;     //Matrix contents
 } matrix;
 
-matrix newMatrix(uint w, uint h);
-void freeMatrix(matrix m);
+matrix new_matrix(uint w, uint h);
+void free_matrix(matrix m);
 double get(matrix m, uint i, uint j);
 void set(matrix m, uint i, uint j, double val);
-double * getRow(matrix m, uint j);
+double * get_row(matrix m, uint j);
 void print(matrix m);
 
 #endif

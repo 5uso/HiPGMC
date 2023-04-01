@@ -10,10 +10,10 @@ typedef struct heap {
     double *   min;
 } heap;
 
-heap newHeap(double * data, uint size);
-void freeHeap(heap h);
-double heapMax(heap h);
-double heapMin(heap h);
+heap new_heap(double * data, uint size);
+void free_heap(heap h);
+double heap_max(heap h);
+double heap_min(heap h);
 void replace(heap * h, double * val);
 
 #endif
