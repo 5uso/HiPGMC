@@ -1,5 +1,5 @@
 FLAGS = -Wall -Ofast
-LINK = -llapack -lblas -llapacke -lcblas -lm -ldl
+LINK = -llapack -lblas -llapacke -lm -ldl
 SUBDIR = bin/
 SRC = src/
 OUT = out/

@@ -76,7 +76,6 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
             for(int x = 1; x < PN + 2; x++) sums[v * num + y] += *h.data[x];
         }
     }
-    //After this is done we no longer need X, maybe free it. (Maybe not since it's an input)
 
     // Main loop
     for(int it = 0; it < NITER; it++) {
