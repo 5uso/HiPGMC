@@ -47,8 +47,7 @@ matrix __gmc_init_u(matrix * S0, uint m, uint num) {
     return U;
 }
 
-bool __gmc_main_loop(int it, matrix * S0, matrix U, matrix w, matrix * F, matrix * F_old, matrix evs, uint m, uint c, uint num,
-                     matrix * ed, heap * idxx, double * sums, double * lambda) {
+void __gmc_update_s0(matrix * S0, matrix U, matrix w, uint m, uint num, matrix * ed, heap * idxx, double * sums) {
     for(int v = 0; v < m; v++) {
         memset(S0[v].data, 0x00, num * num * sizeof(double));
         for(int y = 0; y < num; y++) {
@@ -71,6 +70,12 @@ bool __gmc_main_loop(int it, matrix * S0, matrix U, matrix w, matrix * F, matrix
             }
         }
     }
+}
+
+bool __gmc_main_loop(int it, matrix * S0, matrix U, matrix w, matrix * F, matrix * F_old, matrix evs, uint m, uint c, uint num,
+                     matrix * ed, heap * idxx, double * sums, double * lambda) {
+    // Update S0
+    __gmc_update_s0(S0, U, w, m, num, ed, idxx, sums);
 
     // Update w
     matrix US = new_matrix(num, num);
@@ -220,12 +225,8 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     // Cleanup
     for(int i = 0; i < m; i++) free_matrix(ed[i]);
     for(int i = 0; i < m * num; i++) free_heap(idxx[i]);
-    free_matrix(F_old);
-    free_matrix(sU);
-    free_matrix(w);
-    free(sums);
-    free(idxx);
-    free(ed);
+    free_matrix(F_old); free_matrix(sU); free_matrix(w);
+    free(sums); free(idxx); free(ed);
 
     // Build output struct
     gmc_result result;
