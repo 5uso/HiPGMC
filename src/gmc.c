@@ -73,7 +73,7 @@ GMC_INTERNAL void __gmc_update_s0(matrix * S0, matrix U, matrix w, uint m, uint 
 }
 
 GMC_INTERNAL void __gmc_update_w(matrix * S0, matrix U, matrix w, uint m, uint num) {
-    matrix US = new_matrix(num, num);
+    matrix US = new_matrix(num, num); // TODO: We don't need to reallocate this every time
 
     for(int v = 0; v < m; v++) {
         memcpy(US.data, U.data, num * num * sizeof(double));
