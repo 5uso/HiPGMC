@@ -25,13 +25,20 @@ void free_gmc_result(gmc_result r);
 #define NITER 20
 #define ZR 10e-11
 #define PN 15
-#define IS_LOCAL 1
-#define INLINE_GMC_INTERNALS 1
+#define IS_LOCAL
+#define INLINE_GMC_INTERNALS
+#define PRINT_GMC_STEPS
 
 #ifdef INLINE_GMC_INTERNALS
     #define GMC_INTERNAL static inline
 #else
     #define GMC_INTERNAL __attribute__((noinline))
+#endif
+
+#ifdef PRINT_GMC_STEPS
+    #define GMC_STEP(x) (x)
+#else
+    #define GMC_STEP(x)
 #endif
 
 #endif

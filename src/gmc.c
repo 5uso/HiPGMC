@@ -148,15 +148,19 @@ GMC_INTERNAL void __gmc_update_u(matrix * S0, matrix U, matrix w, matrix * F, ui
 GMC_INTERNAL bool __gmc_main_loop(int it, matrix * S0, matrix U, matrix w, matrix * F, matrix * F_old, matrix evs, uint m, uint c, uint num,
                                    matrix * ed, heap * idxx, double * sums, double * lambda) {
     // Update S0
+    GMC_STEP(printf("Iteration %d, update S0\n", it));
     __gmc_update_s0(S0, U, w, m, num, ed, idxx, sums);
 
     // Update w
+    GMC_STEP(printf("Iteration %d, update w\n", it));
     __gmc_update_w(S0, U, w, m, num);
 
     // Update U
+    GMC_STEP(printf("Iteration %d, update U\n", it));
     __gmc_update_u(S0, U, w, F, m, num, lambda);
 
     // Update matrix of eigenvectors (F), as well as eigenvalues
+    GMC_STEP(printf("Iteration %d, update F\n", it));
     matrix temp = *F_old;
     *F_old = *F;
     *F = temp;
@@ -164,6 +168,7 @@ GMC_INTERNAL bool __gmc_main_loop(int it, matrix * S0, matrix U, matrix w, matri
     *F = update_f(*F, U, ev, c);
 
     // Update lambda
+    GMC_STEP(printf("Iteration %d, update lambda\n", it));
     double fn = 0.0d;
     for(int i = 0; i < c; i++) fn += ev[i];
     if(fn > ZR) {
@@ -185,27 +190,33 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     uint num = X[0].w;
 
     // Normalize data
+    GMC_STEP(printf("Init, normalize\n"));
     if(normalize) __gmc_normalize(X, m, num);
 
     // Initialize SIG matrices
+    GMC_STEP(printf("Init, SIG matrices\n"));
     matrix * S0 = malloc(m * sizeof(matrix));
     for(int v = 0; v < m; v++) S0[v] = init_sig(X[v], PN);
 
     // U starts as average of SIG matrices
+    GMC_STEP(printf("Init, U\n"));
     matrix U = __gmc_init_u(S0, m, num);
 
     // Get matrix of eigenvectors (F), as well as eigenvalues
+    GMC_STEP(printf("Init, F\n"));
     matrix F = new_matrix(num, num);
     matrix F_old = new_matrix(num, num);
     matrix evs = new_matrix(num, NITER + 1);
     F = update_f(F, U, evs.data, c);
 
     // Initialize w to m uniform (All views start with the same weight)
+    GMC_STEP(printf("Init, w\n"));
     double wI = 1.0 / m;
     matrix w = new_matrix(m, 1);
     for(int v = 0; v < m; v++) w.data[v] = wI;
 
     // Used when calculating S0
+    GMC_STEP(printf("Init, S0 sort\n"));
     matrix * ed = malloc(m * sizeof(matrix));
     heap * idxx = malloc(m * num * sizeof(heap));
     double * sums = malloc(m * num * sizeof(double));
@@ -230,16 +241,19 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     }
 
     // U symmetric
+    GMC_STEP(printf("End, symU\n"));
     matrix sU = new_matrix(num, num);
     for(int y = 0; y < num; y++) {
         for(int x = y + 1; x < num; x++) sU.data[y * num + x] = (U.data[y * num + x] + U.data[x * num + y]) / 2.0d;
     }
 
     // Final clustering. Find connected components on sU with Tarjan's algorithm
+    GMC_STEP(printf("End, final clustering\n"));
     int * y = malloc(sU.w * sizeof(int));
     int cluster_num = connected_comp(sU, y);
 
     // Cleanup
+    GMC_STEP(printf("End, cleanup\n"));
     for(int i = 0; i < m; i++) free_matrix(ed[i]);
     for(int i = 0; i < m * num; i++) free_heap(idxx[i]);
     free_matrix(F_old); free_matrix(sU); free_matrix(w);

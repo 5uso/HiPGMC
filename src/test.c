@@ -15,15 +15,16 @@ typedef struct dataset {
 } dataset;
 
 static dataset data[] = {
-    {.path = "../data/TwoMoon", .views = 2, .clusters =  2, .lambda = 1.0d, .normalize = false},
-    {.path =     "../data/BBC", .views = 4, .clusters =  5, .lambda = 1.0d, .normalize =  true},
-    {.path =  "../data/Hdigit", .views = 2, .clusters = 10, .lambda = 1.0d, .normalize =  true},
+    {.path =   "../data/TwoMoon", .views = 2, .clusters =  2, .lambda = 1.0d, .normalize = false},
+    {.path = "../data/ThreeRing", .views = 2, .clusters =  3, .lambda = 1.0d, .normalize = false},
+    {.path =       "../data/BBC", .views = 4, .clusters =  5, .lambda = 1.0d, .normalize = false},
+    {.path =    "../data/Hdigit", .views = 2, .clusters = 10, .lambda = 1.0d, .normalize = false},
 };
 
 int main(int argc, char *argv[]) {
     getchar();
     
-    dataset d = data[0];
+    dataset d = data[3];
     printf("Loading dataset from '%s'\n", d.path);
     matrix * X = read_dataset(d.path);
     printf("Dataset loaded! Running GMC...\n");
