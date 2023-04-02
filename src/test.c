@@ -24,9 +24,13 @@ static dataset data[] = {
 int main(int argc, char *argv[]) {
     getchar();
     
-    dataset d = data[3];
+    dataset d = data[0];
     printf("Loading dataset from '%s'\n", d.path);
     matrix * X = read_dataset(d.path);
+    if(!X) {
+        perror("Couldn't load dataset");
+        exit(1);
+    }
     printf("Dataset loaded! Running GMC...\n");
 
     struct timeval begin, end;

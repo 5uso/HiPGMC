@@ -146,7 +146,7 @@ GMC_INTERNAL void __gmc_update_u(matrix * S0, matrix U, matrix w, matrix * F, ui
 }
 
 GMC_INTERNAL bool __gmc_main_loop(int it, matrix * S0, matrix U, matrix w, matrix * F, matrix * F_old, matrix evs, uint m, uint c, uint num,
-                                   matrix * ed, heap * idxx, double * sums, double * lambda) {
+                                  matrix * ed, heap * idxx, double * sums, double * lambda) {
     // Update S0
     GMC_STEP(printf("Iteration %d, update S0\n", it));
     __gmc_update_s0(S0, U, w, m, num, ed, idxx, sums);
