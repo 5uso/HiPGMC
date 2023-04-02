@@ -27,7 +27,7 @@ void free_gmc_result(gmc_result r);
 #define PN 15
 #define IS_LOCAL
 #define INLINE_GMC_INTERNALS
-#define PRINT_GMC_STEPS
+//#define PRINT_GMC_STEPS
 
 #ifdef INLINE_GMC_INTERNALS
     #define GMC_INTERNAL static inline
