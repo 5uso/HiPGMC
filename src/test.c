@@ -22,8 +22,6 @@ static dataset data[] = {
 };
 
 int main(int argc, char *argv[]) {
-    getchar();
-    
     dataset d = data[0];
     printf("Loading dataset from '%s'\n", d.path);
     matrix * X = read_dataset(d.path);
@@ -31,7 +29,9 @@ int main(int argc, char *argv[]) {
         perror("Couldn't load dataset");
         exit(1);
     }
-    printf("Dataset loaded! Running GMC...\n");
+    printf("Dataset loaded! Press enter to start\n");
+    getchar();
+    printf("Running GMC...\n");
 
     struct timeval begin, end;
     gettimeofday(&begin, 0);

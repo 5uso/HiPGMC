@@ -122,15 +122,11 @@ matrix update_f(matrix F, matrix U, double * ev, uint c) {
     }
 
     // Eigenvalues go in ascending order inside ev, eigenvectors are returned inside F
-    /*LAPACKE_dsyev(LAPACK_COL_MAJOR, 'V', 'U', F.w, F.data, F.w, ev);
-    F.h = c;
-    return F;//*/
-
     int found_eigenvalue_n;
-    int * ifail = malloc(sizeof(int) * c);
-    double * eigenvectors = malloc(sizeof(double) * F.w * c);
-    LAPACKE_dsyevx(LAPACK_COL_MAJOR, 'V', 'I', 'U', F.w, F.data, F.w, -1.0d, -1.0d, 1, c, 0.0d, &found_eigenvalue_n, ev, eigenvectors, F.w, ifail);
-    F.h = c;
+    int * ifail = malloc(sizeof(int) * (c + 1));
+    double * eigenvectors = malloc(sizeof(double) * F.w * (c + 1));
+    LAPACKE_dsyevx(LAPACK_COL_MAJOR, 'V', 'I', 'U', F.w, F.data, F.w, -1.0d, -1.0d, 1, c + 1, 0.0d, &found_eigenvalue_n, ev, eigenvectors, F.w, ifail);
+    F.h = c + 1;
     memcpy(F.data, eigenvectors, sizeof(double) * F.w * F.h);
     free(ifail);
     free(eigenvectors);
