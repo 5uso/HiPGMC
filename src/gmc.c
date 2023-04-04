@@ -164,7 +164,7 @@ GMC_INTERNAL bool __gmc_main_loop(int it, matrix * S0, matrix U, matrix w, matri
     matrix temp = *F_old;
     *F_old = *F;
     *F = temp;
-    double * ev = evs.data + num * it;
+    double * ev = evs.data + (c + 1) * it;
     *F = update_f(*F, U, ev, c);
 
     // Update lambda
@@ -206,7 +206,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     GMC_STEP(printf("Init, F\n"));
     matrix F = new_matrix(num, num);
     matrix F_old = new_matrix(num, num);
-    matrix evs = new_matrix(num, NITER + 1);
+    matrix evs = new_matrix(c + 1, NITER + 1);
     F = update_f(F, U, evs.data, c);
 
     // Initialize w to m uniform (All views start with the same weight)
