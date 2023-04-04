@@ -13,10 +13,29 @@ int __count_dir_files(const char * path) {
     return cnt;
 }
 
-void __fill_matrix(matrix m, FILE * fd) {
-    for(int x = 0; x < m.w; x++)
-        for(int y = 0; y < m.h; y++)
-            fscanf(fd, "%lf", &m.data[y * m.w + x]);
+matrix read_matrix(const char * path) {
+    FILE * fd = fopen(path, "r");
+
+    uint w, h;
+    fscanf(fd, "%u %u", &w, &h);
+    matrix m = new_matrix(w, h);
+
+    for(int y = 0; y < m.h; y++)
+        for(int x = 0; x < m.w; x++)
+            fscanf(fd, "%lg", &m.data[y * m.w + x]);
+
+    return m;
+}
+
+void dump_matrix(matrix m, const char * path) {
+    FILE * fd = fopen(path, "w");
+
+    fprintf(fd, "%u %u\n", m.w, m.h);
+    for(int y = 0; y < m.h; y++) {
+        for(int x = 0; x < m.w; x++)
+            fprintf(fd, "%.17lg ", m.data[y * m.w + x]);
+        fprintf(fd, "\n");
+    }
 }
 
 matrix * read_dataset(const char * path) {
@@ -38,13 +57,8 @@ matrix * read_dataset(const char * path) {
         char filepath[1024];
         snprintf(filepath, 1024, "%s/%s", path, entry->d_name);
         filepath[1023] = '\0';
-        FILE * fd = fopen(filepath, "r");
 
-        uint w, h;
-        fscanf(fd, "%u %u", &w, &h);
-        data[i] = new_matrix(w, h);
-
-        __fill_matrix(data[i], fd);
+        data[i] = read_matrix(filepath);
     }
 
     return data;
