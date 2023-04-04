@@ -2,21 +2,21 @@
 
 GMC_INTERNAL void __gmc_normalize(matrix * X, uint m, uint num) {
     for(int v = 0; v < m; v++) {
-        for(int y = 0; y < num; y++) {
-            int w = X[v].w;
+        int h = X[v].h, w = X[v].w;
+        for(int x = 0; x < w; x++) {
             double mean = 0.0d;
-            for(int x = 0; x < w; x++) mean += X[v].data[y * w + x];
-            mean /= (double) w;
+            for(int y = 0; y < h; y++) mean += X[v].data[y * w + x];
+            mean /= (double) h;
 
             double std = 0.0d;
-            for(int x = 0; x < w; x++) {
+            for(int y = 0; y < h; y++) {
                 double dev = X[v].data[y * w + x] - mean;
                 std += dev * dev;
             }
-            std /= (double) w;
+            std /= (double) h;
             std = sqrt(std);
 
-            for(int x = 0; x < w; x++) X[v].data[y * w + x] = (X[v].data[y * w + x] - mean) / (std + EPS);
+            for(int y = 0; y < h; y++) X[v].data[y * w + x] = (X[v].data[y * w + x] - mean) / (std + EPS);
         }
     }
 }
