@@ -32,9 +32,9 @@ void dump_matrix(matrix m, const char * path) {
 
     fprintf(fd, "%u %u\n", m.w, m.h);
     for(int y = 0; y < m.h; y++) {
-        for(int x = 0; x < m.w; x++)
+        for(int x = 0; x < m.w - 1; x++)
             fprintf(fd, "%.17lg ", m.data[y * m.w + x]);
-        fprintf(fd, "\n");
+        fprintf(fd, "%.17lg\n", m.data[y * m.w + m.w - 1]);
     }
 }
 
