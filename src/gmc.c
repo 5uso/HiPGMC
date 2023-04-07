@@ -6,17 +6,18 @@ GMC_INTERNAL void __gmc_normalize(matrix * X, uint m, uint num) {
         for(int x = 0; x < w; x++) {
             double mean = 0.0d;
             for(int y = 0; y < h; y++) mean += X[v].data[y * w + x];
-            mean /= (double) h;
+            mean /= h;
 
             double std = 0.0d;
             for(int y = 0; y < h; y++) {
                 double dev = X[v].data[y * w + x] - mean;
                 std += dev * dev;
             }
-            std /= (double) h;
+            std /= h - 1;
             std = sqrt(std);
+            if(std == 0) std = EPS;
 
-            for(int y = 0; y < h; y++) X[v].data[y * w + x] = (X[v].data[y * w + x] - mean) / (std + EPS);
+            for(int y = 0; y < h; y++) X[v].data[y * w + x] = (X[v].data[y * w + x] - mean) / std;
         }
     }
 }
