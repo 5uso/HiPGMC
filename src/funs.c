@@ -14,7 +14,9 @@ matrix sqr_dist(matrix m) {
 
     // Compute multiplication by transpose (upper triangular only)
     matrix mt = new_matrix(m.w, m.w);
-    cblas_dsyrk(CblasRowMajor, CblasUpper, CblasTrans, m.w, m.h, 1.0, m.data, m.w, 0.0, mt.data, m.w);
+    cblas_dsyrk(CblasRowMajor, CblasUpper, CblasTrans, m.w, m.h, 1.0d, m.data, m.w, 0.0d, mt.data, m.w);
+    //cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans, m.w, m.w, m.h, 1.0d, m.data, m.w, m.data, m.w, 0.0d, mt.data, m.w);
+    dump_matrix(mt, "init_d2");exit(2711);
 
     // Compute final matrix
     matrix d = new_matrix(m.w, m.w);
@@ -120,6 +122,8 @@ matrix update_f(matrix F, matrix U, double * ev, uint c) {
             F.data[y * F.w + y] -= t;
         }
     }
+
+    //F.h=F.w;dump_matrix(F, "before_eig_o3");exit(2711);
 
     // Eigenvalues go in ascending order inside ev, eigenvectors are returned inside F
     int found_eigenvalue_n;
