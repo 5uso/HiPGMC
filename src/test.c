@@ -1,10 +1,8 @@
-#include "funs.h"
-#include "heap.h"
+#include "gmc_io.h"
 #include "gmc.h"
-#include "input.h"
 
-#include <stdio.h>
 #include <sys/time.h>
+#include <stdio.h>
 
 typedef struct dataset {
     const char * path;
@@ -15,10 +13,10 @@ typedef struct dataset {
 } dataset;
 
 static dataset data[] = {
-    {.path =   "../data/TwoMoon", .views = 2, .clusters =  2, .lambda = 1.0d, .normalize = false},
-    {.path = "../data/ThreeRing", .views = 2, .clusters =  3, .lambda = 1.0d, .normalize = false},
-    {.path =       "../data/BBC", .views = 4, .clusters =  5, .lambda = 1.0d, .normalize = false},
-    {.path =    "../data/Hdigit", .views = 2, .clusters = 10, .lambda = 1.0d, .normalize = false},
+    {.path =   "../data/TwoMoon", .views = 2, .clusters =  2, .lambda = 1.0, .normalize = false},
+    {.path = "../data/ThreeRing", .views = 2, .clusters =  3, .lambda = 1.0, .normalize = false},
+    {.path =       "../data/BBC", .views = 4, .clusters =  5, .lambda = 1.0, .normalize =  true},
+    {.path =    "../data/Hdigit", .views = 2, .clusters = 10, .lambda = 1.0, .normalize =  true},
 };
 
 int main(int argc, char *argv[]) {
@@ -42,8 +40,8 @@ int main(int argc, char *argv[]) {
     printf("Iteration %d: λ=%lf\n", r.iterations, r.lambda);
     printf("Time measured: %.4f seconds.\n", end.tv_sec - begin.tv_sec + (end.tv_usec - begin.tv_usec) * 1e-6);
     
-    //for(int i = 0; i < r.n; i++) printf("%d ", r.y[i]);
-    //printf("\n");
+    for(int i = 0; i < r.n; i++) printf("%d ", r.y[i]);
+    printf("\n");
     //print(r.U);
 
     free_gmc_result(r);

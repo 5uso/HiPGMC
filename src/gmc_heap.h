@@ -15,5 +15,6 @@ void free_heap(heap h);
 double heap_max(heap h);
 double heap_min(heap h);
 void replace(heap * h, double * val);
+double * heap_pop(heap * h);
 
 #endif

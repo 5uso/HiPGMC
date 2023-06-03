@@ -1,10 +1,14 @@
 #ifndef GMC
 #define GMC
 
-#include "funs.h"
-#include <math.h>
-#include <string.h>
+#include "gmc_matrix.h"
+#include "gmc_funs.h"
+#include "gmc_heap.h"
+#include "gmc_sum.h"
+
 #include <stdbool.h>
+#include <string.h>
+#include <math.h>
 
 typedef struct gmc_result {
     matrix U;

@@ -1,7 +1,8 @@
-#ifndef GMCINPUT
-#define GMCINPUT
+#ifndef GMCIO
+#define GMCIO
 
-#include "matrix.h"
+#include "gmc_matrix.h"
+
 #include <dirent.h>
 
 matrix read_matrix(const char * path);

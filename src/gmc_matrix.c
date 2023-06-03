@@ -1,4 +1,4 @@
-#include "matrix.h"
+#include "gmc_matrix.h"
 
 matrix new_matrix(uint w, uint h) {
     matrix m;
