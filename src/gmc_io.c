@@ -1,4 +1,4 @@
-#include "input.h"
+#include "gmc_io.h"
 
 int __count_dir_files(const char * path) {
     int cnt = 0;

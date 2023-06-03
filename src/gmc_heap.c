@@ -1,4 +1,4 @@
-#include "heap.h"
+#include "gmc_heap.h"
 
 void sift_down(heap h, uint i) {
     uint l = 2 * i;
@@ -27,6 +27,7 @@ heap new_heap(double * data, uint size) {
         h.data[i] = data++;
         if(*h.data[i] < *h.min) h.min = h.data[i];
     }
+    
     for(int i = size / 2; i >= 0; i--) sift_down(h, i);
 
     return h;
@@ -48,4 +49,10 @@ void replace(heap * h, double * val) {
     h->data[0] = val;
     sift_down(*h, 0);
     if(*val < *h->min) h->min = val;
+}
+
+double * heap_pop(heap * h) {
+    double * max = h->data[0];
+    replace(h, h->min);
+    return max;
 }

@@ -4,11 +4,11 @@ GMC_INTERNAL void __gmc_normalize(matrix * X, uint m, uint num) {
     for(int v = 0; v < m; v++) {
         int h = X[v].h, w = X[v].w;
         for(int x = 0; x < w; x++) {
-            double mean = 0.0d;
+            double mean = 0.0;
             for(int y = 0; y < h; y++) mean += X[v].data[y * w + x];
             mean /= h;
 
-            double std = 0.0d;
+            double std = 0.0;
             for(int y = 0; y < h; y++) {
                 double dev = X[v].data[y * w + x] - mean;
                 std += dev * dev;
@@ -28,20 +28,18 @@ GMC_INTERNAL matrix __gmc_init_u(matrix * S0, uint m, uint num) {
     // U starts as average of SIG matrices
     memcpy(U.data, S0[0].data, num * num * sizeof(double));
 
-    for(int v = 1; v < m; v++) {
-        for(int y = 0; y < num; y++) {
-            for(int x = 0; x < num; x++) U.data[y * num + x] += S0[v].data[y * num + x];
-        }
-    }
+    for(int v = 1; v < m; v++)
+        for(int y = 0; y < num; y++)
+            for(int x = 0; x < num; x++)
+                U.data[y * num + x] += S0[v].data[y * num + x];
 
-    for(int y = 0; y < num; y++) {
-        for(int x = 0; x < num; x++) U.data[y * num + x] /= (double) num;
-    }
+    for(int y = 0; y < num; y++)
+        for(int x = 0; x < num; x++)
+            U.data[y * num + x] /= m;
 
     // Divide each row of U by its own sum
     for(int y = 0; y < num; y++) {
-        double sum = 0.0d;
-        for(int x = 0; x < num; x++) sum += U.data[y * num + x];
+        double sum = block_sum(U.data + y * num, num);
         for(int x = 0; x < num; x++) U.data[y * num + x] /= sum;
     }
 
@@ -51,39 +49,39 @@ GMC_INTERNAL matrix __gmc_init_u(matrix * S0, uint m, uint num) {
 GMC_INTERNAL void __gmc_update_s0(matrix * S0, matrix U, matrix w, uint m, uint num, matrix * ed, heap * idxx, double * sums) {
     for(int v = 0; v < m; v++) {
         memset(S0[v].data, 0x00, num * num * sizeof(double));
+        long long offsetU = U.data - ed[v].data;
+        long long offsetS = S0[v].data - ed[v].data;
+        double weight = w.data[v] * 2.0;
+
         for(int y = 0; y < num; y++) {
             heap h = idxx[v * num + y];
-            long long offsetU = U.data - ed[v].data;
-            long long offsetS = S0[v].data - ed[v].data;
-            double weight = w.data[v] *  2.0d;
+            double max = heap_max(h);
+            double maxU = *(offsetU + h.data[0]);
 
-            double sumU = -*(offsetU + h.min);
-            for(int x = 1; x < PN + 2; x++) sumU += *(offsetU + h.data[x]);
+            double sumU = block_sum_ptr(h.data + 1, PN, offsetU);
 
-            double numerator = heap_max(h) - *(offsetU + h.data[0]) * weight;
-            double denominator1 = PN * heap_max(h) - sums[v * num + y];
-            double denominator2 = (sumU - *(offsetU + h.data[0]) * PN) * weight;
+            double numerator = max - weight * maxU;
+            double denominator = PN * max - sums[v * num + y] + weight * (sumU - PN * maxU) + EPS;
 
-            for(int x = 0; x < PN + 2; x++) {
-                if(h.data[x] == h.min) continue;
-                double r = (numerator - *h.data[x] + weight * *(offsetU + h.data[x])) / (denominator1 + denominator2 + EPS);
-                if(r > 0.0d) *(offsetS + h.data[x]) = r;
+            for(int x = 0; x < PN + 1; x++) {
+                double r = (numerator - *h.data[x] + weight * *(offsetU + h.data[x])) / denominator;
+                *(offsetS + h.data[x]) = r * (r > 0.0);
             }
         }
     }
 }
 
 GMC_INTERNAL void __gmc_update_w(matrix * S0, matrix U, matrix w, uint m, uint num) {
-    matrix US = new_matrix(num, num); // TODO: We don't need to reallocate this every time
+    matrix US = new_matrix(num, num);
 
     for(int v = 0; v < m; v++) {
         memcpy(US.data, U.data, num * num * sizeof(double));
-        for(int y = 0; y < num; y++) {
-            for(int x = 0; x < num; x++) US.data[y * num + x] -= S0[v].data[y * num + x];
-        }
+        for(int y = 0; y < num; y++)
+            for(int x = 0; x < num; x++)
+                US.data[y * num + x] -= S0[v].data[y * num + x];
 
         double distUS = LAPACKE_dlange(LAPACK_COL_MAJOR, 'F', num, num, US.data, num);
-        w.data[v] = 0.5d / (distUS + EPS);
+        w.data[v] = 0.5 / (distUS + EPS);
     }
 
     free_matrix(US);
@@ -110,14 +108,14 @@ GMC_INTERNAL void __gmc_update_u(matrix * S0, matrix U, matrix w, matrix * F, ui
                 }
             }
         #else
-            memset(idx, 0x00, num * sizeof(bool));
+            memset(idx, 0x01, num * sizeof(bool));
             qw = num;
         #endif
 
         matrix q = new_matrix(qw, m);
         for(int x = 0, i = 0; x < num; x++) {
             if(idx[x]) {
-                q.data[i] = *lambda * dist.data[y * num + x] / (double) m * -0.5d;
+                q.data[i] = *lambda * dist.data[y * num + x] / (double) m * -0.5;
                 i++;
             } 
         }
@@ -136,7 +134,7 @@ GMC_INTERNAL void __gmc_update_u(matrix * S0, matrix U, matrix w, matrix * F, ui
             if(idx[x]) {
                 U.data[y * num + x] = q.data[i];
                 i++;
-            } else U.data[y * num + x] = 0.0d;
+            } else U.data[y * num + x] = 0.0;
         }
 
         free_matrix(q);
@@ -170,12 +168,11 @@ GMC_INTERNAL bool __gmc_main_loop(int it, matrix * S0, matrix U, matrix w, matri
 
     // Update lambda
     GMC_STEP(printf("Iteration %d, update lambda\n", it));
-    double fn = 0.0d;
-    for(int i = 0; i < c; i++) fn += ev[i];
+    double fn = block_sum(ev, c);
     if(fn > ZR) {
-        *lambda *= 2.0d;
+        *lambda *= 2.0;
     } else if(fn + ev[c] < ZR) {
-        *lambda /= 2.0d;
+        *lambda /= 2.0;
         temp = *F_old;
         *F_old = *F;
         *F = temp;
@@ -223,46 +220,47 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
     double * sums = malloc(m * num * sizeof(double));
     for(int v = 0; v < m; v++) {
         ed[v] = sqr_dist(X[v]);
-        // TODO: Check -> Store sort into idxx (heap, since the loop uses lowest values?)
         for(int y = 0; y < num; y++) {
-            heap h = new_heap(ed[v].data + y * num, PN + 2);
-            for(int x = PN + 2; x < num; x++) {
-                if(ed[v].data[y * num + x] < heap_max(h)) replace(&h, ed[v].data + y * num + x);
-            }
+            ed[v].data[y * num + y] = INFINITY;
+            
+            heap h = new_heap(ed[v].data + y * num, PN + 1);
+            for(int x = PN + 1; x < num; x++)
+                if(ed[v].data[y * num + x] < heap_max(h))
+                    replace(&h, ed[v].data + y * num + x);
+                
             idxx[v * num + y] = h;
-            sums[v * num + y] = -heap_min(h);
-            for(int x = 1; x < PN + 2; x++) sums[v * num + y] += *h.data[x];
+            sums[v * num + y] = block_sum_ptr(h.data + 1, PN, 0);
         }
     }
 
     // Main loop
     int it;
-    for(it = 0; it < NITER; it++) {
-       if(__gmc_main_loop(it, S0, U, w, &F, &F_old, evs, m, c, num, ed, idxx, sums, &lambda)) break;
-    }
+    for(it = 0; it < NITER; it++)
+        if(__gmc_main_loop(it, S0, U, w, &F, &F_old, evs, m, c, num, ed, idxx, sums, &lambda))
+            break;
 
-    // U symmetric
+    // Adjacency matrix
     GMC_STEP(printf("End, symU\n"));
-    matrix sU = new_matrix(num, num);
-    for(int y = 0; y < num; y++) {
-        for(int x = y + 1; x < num; x++) sU.data[y * num + x] = (U.data[y * num + x] + U.data[x * num + y]) / 2.0d;
-    }
+    bool * adj = malloc(num * num * sizeof(bool));
+    for(int j = 0; j < num; j++)
+        for(int x = 0; x < j; x++)
+            adj[j * num + x] = (U.data[j * num + x] != 0.0) || (U.data[x * num + j] != 0.0);
 
     // Final clustering. Find connected components on sU with Tarjan's algorithm
     GMC_STEP(printf("End, final clustering\n"));
-    int * y = malloc(sU.w * sizeof(int));
-    int cluster_num = connected_comp(sU, y);
+    int * y = malloc(num * sizeof(int));
+    int cluster_num = connected_comp(adj, y, num);
 
     // Cleanup
     GMC_STEP(printf("End, cleanup\n"));
     for(int i = 0; i < m; i++) free_matrix(ed[i]);
     for(int i = 0; i < m * num; i++) free_heap(idxx[i]);
-    free_matrix(F_old); free_matrix(sU); free_matrix(w);
-    free(sums); free(idxx); free(ed);
+    free_matrix(F_old); free_matrix(w);
+    free(sums); free(idxx); free(ed); free(adj);
 
     // Build output struct
     gmc_result result;
-    result.U = U; result.S0 = S0; result.F = F; result.evs = evs; result.y = y; result.n = sU.w; result.m = m;
+    result.U = U; result.S0 = S0; result.F = F; result.evs = evs; result.y = y; result.n = num; result.m = m;
     result.cluster_num = cluster_num; result.iterations = it + 1; result.lambda = lambda;
     return result;
 }

@@ -1,10 +1,8 @@
-#include "funs.h"
-#include "heap.h"
+#include "gmc_io.h"
 #include "gmc.h"
-#include "input.h"
 
-#include <stdio.h>
 #include <sys/time.h>
+#include <stdio.h>
 
 typedef struct dataset {
     const char * path;
@@ -15,52 +13,14 @@ typedef struct dataset {
 } dataset;
 
 static dataset data[] = {
-    {.path =   "../data/TwoMoon", .views = 2, .clusters =  2, .lambda = 1.0d, .normalize = false},
-    {.path = "../data/ThreeRing", .views = 2, .clusters =  3, .lambda = 1.0d, .normalize = false},
-    {.path =       "../data/BBC", .views = 4, .clusters =  5, .lambda = 1.0d, .normalize = true},
-    {.path =    "../data/Hdigit", .views = 2, .clusters = 10, .lambda = 1.0d, .normalize = false},
+    {.path =   "../data/TwoMoon", .views = 2, .clusters =  2, .lambda = 1.0, .normalize = false},
+    {.path = "../data/ThreeRing", .views = 2, .clusters =  3, .lambda = 1.0, .normalize = false},
+    {.path =       "../data/BBC", .views = 4, .clusters =  5, .lambda = 1.0, .normalize =  true},
+    {.path =    "../data/Hdigit", .views = 2, .clusters = 10, .lambda = 1.0, .normalize =  true},
 };
 
-void what_eig() {
-    matrix F = read_matrix("../before_eig_o3");
-    /*for(int y = 0; y < F.h; y++) {//L
-        for(int x = 0; x < y - 2; x++)
-            F.data[y * F.w + x] = 0.0d;
-    }*/
-
-    for(int y = 0; y < F.h; y++) {//U
-        for(int x = y + 1; x < F.w; x++)
-            F.data[y * F.w + x] = 0.0d;
-    }
-
-    int E = LAPACK_COL_MAJOR;
-    int found_eigenvalue_n;
-    int * ifail = malloc(sizeof(int) * 6);
-    double * ev = malloc(sizeof(double) * 6);
-    double * eigenvectors = malloc(sizeof(double) * F.w * 6);
-    LAPACKE_dsyevx(E, 'V', 'I', 'U', F.w, F.data, F.w, -1.0d, -1.0d, 1, 6, 0.0d, &found_eigenvalue_n, ev, eigenvectors, F.w, ifail);
-    F.h = 6;
-    memcpy(F.data, eigenvectors, sizeof(double) * F.w * F.h);
-
-    for(int i = 0; i < 6; i++) printf("%lf ", ev[i]);
-    printf("\n");
-}
-
-void what_mul() {
-    matrix m = read_matrix("../after_norm");
-    matrix mt = new_matrix(m.w, m.w);
-    //cblas_dsyrk(CblasRowMajor, CblasUpper, CblasTrans, m.w, m.h, 1.0d, m.data, m.w, 0.0d, mt.data, m.w);
-    cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans, m.w, m.w, m.h, 1.0d, m.data, m.w, m.data, m.w, 0.0d, mt.data, m.w);
-    dump_matrix(mt, "mul_test2");
-}
-
 int main(int argc, char *argv[]) {
-    /*what_eig();
-    return 0;//*/
-    /*what_mul();
-    return 0;//*/
-
-    dataset d = data[2];
+    dataset d = data[0];
     printf("Loading dataset from '%s'\n", d.path);
     matrix * X = read_dataset(d.path);
     if(!X) {
