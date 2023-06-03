@@ -105,35 +105,26 @@ matrix update_u(matrix q) { // Height of q is m
 }
 
 matrix update_f(matrix F, matrix U, double * ev, uint c) {
-    /*for(int y = 0; y < U.w; y++) {
-        F.data[y * F.w + y] = -U.data[y * U.w + y];
-        for(int i = 0; i < y; i++) F.data[y * F.w + y] -= F.data[y * U.w + i];
-        for(int x = y + 1; x < U.w; x++) {
-            double t = -(U.data[y * U.w + x] + U.data[x * U.w + y]) / 2.0;
-            F.data[x * F.w + y] = t;
-            F.data[y * F.w + y] -= t;
-        }
-    }*/
-
-    // TODO: Make this faster again
     for(int y = 0; y < U.w; y++) {
-        for(int x = 0; x < U.w; x++) {
-            double temp = U.data[y * U.w + x] + U.data[x * U.w + y];
-            F.data[y * U.w + x] = temp / (4.0 * (temp == 0.0) - 2.0);
-        }
+        for(int x = y; x < U.w; x++)
+            F.data[y * U.w + x] = (U.data[y * U.w + x] + U.data[x * U.w + y]) / -2.0;
+            
+        F.data[y * U.w + y] -= block_sum(F.data + y * U.w + y + 1, U.w - y - 1) + block_sum_col(F.data + y, y, U.w);
     }
-
-    for(int y = 0; y < U.w; y++)
-        F.data[y * U.w + y] -= block_sum_col(F.data + y, U.w, U.w);
 
     // Eigenvalues go in ascending order inside ev, eigenvectors are returned inside F
     int found_eigenvalue_n;
     double * eigenvectors = malloc(sizeof(double) * F.w * (c + 1));
     int * ifail = malloc(sizeof(int) * (c + 1));
-    LAPACKE_dsyevx(LAPACK_COL_MAJOR, 'V', 'I', 'U', F.w, F.data, F.w, -1.0, -1.0, 1, c + 1, 0.0, &found_eigenvalue_n, ev, eigenvectors, F.w, ifail);
 
+    // We are using row major upper triangular, but LAPACKE's dsyevx seems to have issues with row major,
+    // so column major with lower triangular is equivalent in symmetric matrices
+    int E = LAPACK_COL_MAJOR;
+    LAPACKE_dsyevx(E, 'V', 'I', 'L', F.w, F.data, F.w, -1.0, -1.0, 1, c + 1, 0.0, &found_eigenvalue_n, ev, eigenvectors, F.w, ifail);
+
+    // Ignore the (c+1)th eigenvector, we only need that for the eigenvalue
     memcpy(F.data, eigenvectors, sizeof(double) * F.w * c);
-    F.h = c; // Ignore the (c+1)th eigenvector, we only need that for the eigenvalue
+    F.h = c; 
 
     free(ifail);
     free(eigenvectors);
