@@ -1,5 +1,11 @@
 #include "gmc.h"
 
+static int numprocs, rank;
+static MPI_Comm comm;
+
+static int blacs_row, blacs_col, blacs_height, blacs_width;
+static int blacs_ctx;
+
 GMC_INTERNAL void __gmc_normalize(matrix * X, uint m, uint num) {
     for(int v = 0; v < m; v++) {
         int h = X[v].h, w = X[v].w;
@@ -184,8 +190,51 @@ GMC_INTERNAL bool __gmc_main_loop(int it, matrix * S0, matrix U, matrix w, matri
     return false;
 }
 
-gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize) {
-    uint num = X[0].w;
+gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize, MPI_Comm in_comm, int in_context) {
+    // Get MPI info
+    comm = in_comm;
+    MPI_Comm_size(comm, &numprocs);
+    MPI_Comm_rank(comm, &rank);
+
+    // Get BLACS info
+    blacs_ctx = in_context;
+    Cblacs_gridinfo(blacs_ctx, &blacs_height, &blacs_width, &blacs_row, &blacs_col);
+
+    // Broadcast parameters to all processes in the group
+    struct { uint m, c, n; double l; bool norm; } params = {
+        .m = m,
+        .c = c,
+        .n = rank ? 0 : X[0].w,
+        .l = lambda,
+        .norm = normalize,
+    };
+
+    MPI_Bcast(&params, sizeof(params), MPI_BYTE, 0, comm);
+    m = params.m, c = params.c, lambda = params.l, normalize = params.norm;
+    uint num = params.n;
+
+    int i_zero = 0, i_one = 1, tm = 8, tn = 8, mb = 3, nb = 3;
+    double one = 1.0, zero = 0.0;
+    matrix test = {};
+    if(!rank) {
+        test = new_matrix(tm, tn);
+        for(int i = 0; i < tm*tn; i++) test.data[i] = 2.0;
+    } 
+    int mp = numroc_(&tm, &mb, &blacs_row, &i_zero, &blacs_height);
+    int nq = numroc_(&tn, &nb, &blacs_col, &i_zero, &blacs_width);
+    printf("row:%d col:%d mp:%d nq:%d\n", blacs_row, blacs_col, mp, nq);
+    matrix distr = new_matrix(mp, nq);
+    int lld = numroc_(&tn, &tn, &blacs_row, &i_zero, &blacs_height);
+    if(lld < 1) lld = 1;
+    int info; arr_desc a_desc, a_distr_desc, z_distr_desc;
+    descinit_(&a_desc, &tm, &tn, &tm, &tn, &i_zero, &i_zero, &blacs_ctx, &lld, &info);
+    int lld_distr = mp > 1 ? mp : 1;
+    descinit_(&a_distr_desc, &tm, &tn, &mb, &nb, &i_zero, &i_zero, &blacs_ctx, &lld_distr, &info);
+    pdgeadd_("N", &tm, &tn, &one, test.data, &i_one, &i_one, &a_desc, &zero, distr.data, &i_one, &i_one, &a_distr_desc);
+    double *ev, *z;
+    gmc_pdsyevx('L', tn, distr.data, a_distr_desc, 1, 2, 0.0, &ev, &z, &z_distr_desc);
+    MPI_Finalize();
+    exit(0);
 
     // Normalize data
     GMC_STEP(printf("Init, normalize\n"));

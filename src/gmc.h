@@ -1,6 +1,7 @@
 #ifndef GMC
 #define GMC
 
+#include "gmc_scalapack.h"
 #include "gmc_matrix.h"
 #include "gmc_funs.h"
 #include "gmc_heap.h"
@@ -9,6 +10,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <math.h>
+#include <mpi.h>
 
 typedef struct gmc_result {
     matrix U;
@@ -23,7 +25,7 @@ typedef struct gmc_result {
     double lambda;
 } gmc_result;
 
-gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize);
+gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize, MPI_Comm in_comm, int in_context);
 void free_gmc_result(gmc_result r);
 
 #define NITER 20
@@ -31,7 +33,7 @@ void free_gmc_result(gmc_result r);
 #define PN 15
 #define IS_LOCAL
 #define INLINE_GMC_INTERNALS
-//#define PRINT_GMC_STEPS
+#define PRINT_GMC_STEPS
 
 #ifdef INLINE_GMC_INTERNALS
     #define GMC_INTERNAL static inline
@@ -40,7 +42,7 @@ void free_gmc_result(gmc_result r);
 #endif
 
 #ifdef PRINT_GMC_STEPS
-    #define GMC_STEP(x) (x)
+    #define GMC_STEP(x) if(!rank) (x)
 #else
     #define GMC_STEP(x)
 #endif
