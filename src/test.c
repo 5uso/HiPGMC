@@ -13,10 +13,11 @@ typedef struct dataset {
 } dataset;
 
 static dataset data[] = {
-    {.path =   "../data/TwoMoon", .views = 2, .clusters =  2, .lambda = 1.0, .normalize = false},
-    {.path = "../data/ThreeRing", .views = 2, .clusters =  3, .lambda = 1.0, .normalize = false},
-    {.path =       "../data/BBC", .views = 4, .clusters =  5, .lambda = 1.0, .normalize =  true},
-    {.path =    "../data/Hdigit", .views = 2, .clusters = 10, .lambda = 1.0, .normalize =  true},
+    {.path =   "../data/TwoMoon", .views = 2, .clusters =   2, .lambda = 1.0, .normalize = false},
+    {.path = "../data/ThreeRing", .views = 2, .clusters =   3, .lambda = 1.0, .normalize = false},
+    {.path =       "../data/BBC", .views = 4, .clusters =   5, .lambda = 1.0, .normalize =  true},
+    {.path =    "../data/Hdigit", .views = 2, .clusters =  10, .lambda = 1.0, .normalize =  true},
+    {.path = "../data/100leaves", .views = 3, .clusters = 100, .lambda = 1.0, .normalize =  true},
 };
 
 int main(int argc, char *argv[]) {
