@@ -152,45 +152,56 @@ GMC_INTERNAL void __gmc_update_u(matrix * S0, matrix U, matrix w, matrix * F, ui
 
 GMC_INTERNAL bool __gmc_main_loop(int it, matrix * S0, matrix U, matrix w, matrix * F, matrix * F_old, matrix evs, uint m, uint c, uint num,
                                   matrix * ed, heap * idxx, double * sums, double * lambda) {
-    // Update S0
-    GMC_STEP(printf("Iteration %d, update S0\n", it));
-    __gmc_update_s0(S0, U, w, m, num, ed, idxx, sums);
+    bool end_iteration = false;
+    double * ev = NULL;
 
-    // Update w
-    GMC_STEP(printf("Iteration %d, update w\n", it));
-    __gmc_update_w(S0, U, w, m, num);
+    if(!rank) {
+        // Update S0
+        GMC_STEP(printf("Iteration %d, update S0\n", it));
+        __gmc_update_s0(S0, U, w, m, num, ed, idxx, sums);
 
-    // Update U
-    GMC_STEP(printf("Iteration %d, update U\n", it));
-    __gmc_update_u(S0, U, w, F, m, num, lambda);
+        // Update w
+        GMC_STEP(printf("Iteration %d, update w\n", it));
+        __gmc_update_w(S0, U, w, m, num);
 
-    // Update matrix of eigenvectors (F), as well as eigenvalues
-    GMC_STEP(printf("Iteration %d, update F\n", it));
-    matrix temp = *F_old;
-    *F_old = *F;
-    *F = temp;
-    double * ev = evs.data + (c + 1) * it;
-    *F = update_f(*F, U, ev, c);
+        // Update U
+        GMC_STEP(printf("Iteration %d, update U\n", it));
+        __gmc_update_u(S0, U, w, F, m, num, lambda);
 
-    // Update lambda
-    GMC_STEP(printf("Iteration %d, update lambda\n", it));
-    double fn = block_sum(ev, c);
-    if(fn > ZR) {
-        *lambda *= 2.0;
-    } else if(fn + ev[c] < ZR) {
-        *lambda /= 2.0;
-        temp = *F_old;
+        // Update matrix of eigenvectors (F), as well as eigenvalues
+        GMC_STEP(printf("Iteration %d, update F\n", it));
+        matrix temp = *F_old;
         *F_old = *F;
         *F = temp;
-    } else {
-        evs.h = it + 2;
-        return true;
-    }
+        ev = evs.data + (c + 1) * it;
+        *F = update_f(*F, U, ev, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm);
 
-    return false;
+        // Update lambda
+        GMC_STEP(printf("Iteration %d, update lambda\n", it));
+        double fn = block_sum(ev, c);
+        if(fn > ZR) {
+            *lambda *= 2.0;
+        } else if(fn + ev[c] < ZR) {
+            *lambda /= 2.0;
+            temp = *F_old;
+            *F_old = *F;
+            *F = temp;
+        } else {
+            evs.h = it + 2;
+            end_iteration = true;
+        }
+    } else {
+        update_f(*F, U, ev, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm);
+    }
+    
+    MPI_Bcast(&end_iteration, 1, MPI_C_BOOL, 0, comm);
+    return end_iteration;
 }
 
 gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize, MPI_Comm in_comm, int in_context) {
+    matrix *S0 = NULL, *ed = NULL, U, F, F_old, evs, w;
+    heap *idxx = NULL; double *sums = NULL;    
+
     // Get MPI info
     comm = in_comm;
     MPI_Comm_size(comm, &numprocs);
@@ -213,73 +224,54 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize, MPI_Co
     m = params.m, c = params.c, lambda = params.l, normalize = params.norm;
     uint num = params.n;
 
-    int i_zero = 0, i_one = 1, tm = 8, tn = 8, mb = 3, nb = 3;
-    double one = 1.0, zero = 0.0;
-    matrix test = {};
     if(!rank) {
-        test = new_matrix(tm, tn);
-        for(int i = 0; i < tm*tn; i++) test.data[i] = 2.0;
-    } 
-    int mp = numroc_(&tm, &mb, &blacs_row, &i_zero, &blacs_height);
-    int nq = numroc_(&tn, &nb, &blacs_col, &i_zero, &blacs_width);
-    printf("row:%d col:%d mp:%d nq:%d\n", blacs_row, blacs_col, mp, nq);
-    matrix distr = new_matrix(mp, nq);
-    int lld = numroc_(&tn, &tn, &blacs_row, &i_zero, &blacs_height);
-    if(lld < 1) lld = 1;
-    int info; arr_desc a_desc, a_distr_desc, z_distr_desc;
-    descinit_(&a_desc, &tm, &tn, &tm, &tn, &i_zero, &i_zero, &blacs_ctx, &lld, &info);
-    int lld_distr = mp > 1 ? mp : 1;
-    descinit_(&a_distr_desc, &tm, &tn, &mb, &nb, &i_zero, &i_zero, &blacs_ctx, &lld_distr, &info);
-    pdgeadd_("N", &tm, &tn, &one, test.data, &i_one, &i_one, &a_desc, &zero, distr.data, &i_one, &i_one, &a_distr_desc);
-    double *ev, *z;
-    gmc_pdsyevx('L', tn, distr.data, a_distr_desc, 1, 2, 0.0, &ev, &z, &z_distr_desc);
-    MPI_Finalize();
-    exit(0);
+        // Normalize data
+        GMC_STEP(printf("Init, normalize\n"));
+        if(normalize) __gmc_normalize(X, m, num);
 
-    // Normalize data
-    GMC_STEP(printf("Init, normalize\n"));
-    if(normalize) __gmc_normalize(X, m, num);
+        // Initialize SIG matrices
+        GMC_STEP(printf("Init, SIG matrices\n"));
+        S0 = malloc(m * sizeof(matrix));
+        for(int v = 0; v < m; v++) S0[v] = init_sig(X[v], PN);
 
-    // Initialize SIG matrices
-    GMC_STEP(printf("Init, SIG matrices\n"));
-    matrix * S0 = malloc(m * sizeof(matrix));
-    for(int v = 0; v < m; v++) S0[v] = init_sig(X[v], PN);
+        // U starts as average of SIG matrices
+        GMC_STEP(printf("Init, U\n"));
+        U = __gmc_init_u(S0, m, num);
 
-    // U starts as average of SIG matrices
-    GMC_STEP(printf("Init, U\n"));
-    matrix U = __gmc_init_u(S0, m, num);
+        // Get matrix of eigenvectors (F), as well as eigenvalues
+        GMC_STEP(printf("Init, F\n"));
+        F = new_matrix(num, num);
+        F_old = new_matrix(num, num);
+        evs = new_matrix(c + 1, NITER + 1);
+        F = update_f(F, U, evs.data, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm);
 
-    // Get matrix of eigenvectors (F), as well as eigenvalues
-    GMC_STEP(printf("Init, F\n"));
-    matrix F = new_matrix(num, num);
-    matrix F_old = new_matrix(num, num);
-    matrix evs = new_matrix(c + 1, NITER + 1);
-    F = update_f(F, U, evs.data, c);
+        // Initialize w to m uniform (All views start with the same weight)
+        GMC_STEP(printf("Init, w\n"));
+        double wI = 1.0 / m;
+        w = new_matrix(m, 1);
+        for(int v = 0; v < m; v++) w.data[v] = wI;
 
-    // Initialize w to m uniform (All views start with the same weight)
-    GMC_STEP(printf("Init, w\n"));
-    double wI = 1.0 / m;
-    matrix w = new_matrix(m, 1);
-    for(int v = 0; v < m; v++) w.data[v] = wI;
-
-    // Used when calculating S0
-    GMC_STEP(printf("Init, S0 sort\n"));
-    matrix * ed = malloc(m * sizeof(matrix));
-    heap * idxx = malloc(m * num * sizeof(heap));
-    double * sums = malloc(m * num * sizeof(double));
-    for(int v = 0; v < m; v++) {
-        ed[v] = sqr_dist(X[v]);
-        for(int y = 0; y < num; y++) {
-            ed[v].data[y * num + y] = INFINITY;
-            
-            heap h = new_heap(ed[v].data + y * num, PN + 1);
-            for(int x = PN + 1; x < num; x++)
-                if(ed[v].data[y * num + x] < heap_max(h))
-                    replace(&h, ed[v].data + y * num + x);
+        // Used when calculating S0
+        GMC_STEP(printf("Init, S0 sort\n"));
+        ed = malloc(m * sizeof(matrix));
+        idxx = malloc(m * num * sizeof(heap));
+        sums = malloc(m * num * sizeof(double));
+        for(int v = 0; v < m; v++) {
+            ed[v] = sqr_dist(X[v]);
+            for(int y = 0; y < num; y++) {
+                ed[v].data[y * num + y] = INFINITY;
                 
-            idxx[v * num + y] = h;
-            sums[v * num + y] = block_sum_ptr(h.data + 1, PN, 0);
+                heap h = new_heap(ed[v].data + y * num, PN + 1);
+                for(int x = PN + 1; x < num; x++)
+                    if(ed[v].data[y * num + x] < heap_max(h))
+                        replace(&h, ed[v].data + y * num + x);
+                    
+                idxx[v * num + y] = h;
+                sums[v * num + y] = block_sum_ptr(h.data + 1, PN, 0);
+            }
         }
+    } else {
+        update_f(F, U, evs.data, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm);
     }
 
     // Main loop
@@ -287,6 +279,12 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize, MPI_Co
     for(it = 0; it < NITER; it++)
         if(__gmc_main_loop(it, S0, U, w, &F, &F_old, evs, m, c, num, ed, idxx, sums, &lambda))
             break;
+
+    // Workers return before final clustering
+    if(rank) {
+        gmc_result null_result;
+        return null_result;
+    }
 
     // Adjacency matrix
     GMC_STEP(printf("End, symU\n"));

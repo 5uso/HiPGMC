@@ -1,6 +1,6 @@
 #include "gmc_matrix.h"
 
-matrix new_matrix(uint w, uint h) {
+matrix new_matrix(int w, int h) {
     matrix m;
     m.w = w; m.h = h;
     m.data = malloc(w * h * sizeof(double));

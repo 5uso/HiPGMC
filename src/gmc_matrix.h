@@ -5,15 +5,15 @@
 #include <stdio.h>
 
 typedef struct matrix {
-    uint w; uint h;     // Width & Height
+    int w; int h;     // Width & Height
     double *  data;     // Matrix contents
 } matrix;
 
-matrix new_matrix(uint w, uint h);
+matrix new_matrix(int w, int h);
 void free_matrix(matrix m);
-double get(matrix m, uint i, uint j);
-void set(matrix m, uint i, uint j, double val);
-double * get_row(matrix m, uint j);
+double get(matrix m, int i, int j);
+void set(matrix m, int i, int j, double val);
+double * get_row(matrix m, int j);
 void print(matrix m);
 
 #endif

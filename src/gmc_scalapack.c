@@ -1,6 +1,6 @@
 #include "gmc_scalapack.h"
 
-int max(int a, int b) {
+static inline int max(int a, int b) {
     return b > a ? b : a;
 }
 
@@ -18,7 +18,7 @@ int gmc_pdsyevx(char uplo, int n, double * a, arr_desc desca, int il, int iu, do
     int m, nz, info;
 
     // Prepare Z
-    int zm = n, zn = iu - il + 1;
+    int zm = n, zn = n;
     int z_mp = numroc_(&zm, &nb, &blacs_row, &izero, &blacs_height);
     int z_nq = numroc_(&zn, &nb, &blacs_col, &izero, &blacs_width);
     *z = malloc(z_mp * z_nq * sizeof(double));

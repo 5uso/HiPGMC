@@ -1,9 +1,13 @@
 #include "gmc_funs.h"
 
+static inline int max(int a, int b) {
+    return b > a ? b : a;
+}
+
 matrix sqr_dist(matrix m) {
     // Compute sum of squared columns vector
     double * ssc = malloc(m.w * sizeof(double));
-    for(uint i = 0; i < m.w; i++)
+    for(int i = 0; i < m.w; i++)
         ssc[i] = block_sum_col_sqr(m.data + i, m.h, m.w);
 
     // Compute multiplication by transpose (upper triangular only)
@@ -12,8 +16,8 @@ matrix sqr_dist(matrix m) {
 
     // Compute final matrix
     matrix d = new_matrix(m.w, m.w);
-    for(uint i = 0; i < m.w; i++) {
-        for(uint j = 0; j < m.w; j++) {
+    for(int i = 0; i < m.w; i++) {
+        for(int j = 0; j < m.w; j++) {
             if(i == j) {
                 d.data[j * d.w + i] = d.data[i * d.w + j] = 0.0;
                 continue;
@@ -29,7 +33,7 @@ matrix sqr_dist(matrix m) {
     return d;
 }
 
-matrix init_sig(matrix x, uint k) {
+matrix init_sig(matrix x, int k) {
     matrix d = sqr_dist(x);
 
     for(int j = 0; j < d.h; j++) {
@@ -104,30 +108,53 @@ matrix update_u(matrix q) { // Height of q is m
     return q;
 }
 
-matrix update_f(matrix F, matrix U, double * ev, uint c) {
-    for(int y = 0; y < U.w; y++) {
-        for(int x = y; x < U.w; x++)
-            F.data[y * U.w + x] = (U.data[y * U.w + x] + U.data[x * U.w + y]) / -2.0;
-            
-        F.data[y * U.w + y] -= block_sum(F.data + y * U.w + y + 1, U.w - y - 1) + block_sum_col(F.data + y, y, U.w);
+matrix update_f(matrix F, matrix U, double * ev, int c, int rank, int blacs_row, int blacs_col, int blacs_height, int blacs_width, int blacs_ctx,
+                MPI_Comm comm) {
+    int izero = 0, ione = 1, nb = BLOCK_SIZE, info;
+    double done = 1.0, dzero = 0.0;
+    arr_desc fd, flocald, eigvecd;
+
+    int n = F.w;
+    MPI_Bcast(&n, 1, MPI_INT, 0, comm);
+
+    if(!rank) {
+        for(int y = 0; y < U.w; y++) {
+            for(int x = y; x < U.w; x++)
+                F.data[y * U.w + x] = (U.data[y * U.w + x] + U.data[x * U.w + y]) / -2.0;
+                
+            F.data[y * U.w + y] -= block_sum(F.data + y * U.w + y + 1, U.w - y - 1) + block_sum_col(F.data + y, y, U.w);
+        }
     }
+    
+    // Find dimensions of distributed matrix and create local instances
+    int mp = numroc_(&n, &nb, &blacs_row, &izero, &blacs_height);
+    int nq = numroc_(&n, &nb, &blacs_col, &izero, &blacs_width);
+    matrix f_local = new_matrix(mp, nq);
+    int lld = max(1, numroc_(&n, &n, &blacs_row, &izero, &blacs_height));
+    int lld_local = max(1, mp);
 
-    // Eigenvalues go in ascending order inside ev, eigenvectors are returned inside F
-    int found_eigenvalue_n;
-    double * eigenvectors = malloc(sizeof(double) * F.w * (c + 1));
-    int * ifail = malloc(sizeof(int) * (c + 1));
+    // Distribute matrix by adding 0 to it
+    // Original F has block size equal to total matrix size, since it's only on process 0
+    // Distributed F is properly configured to be shared between processes
+    descinit_(&fd, &n, &n, &n, &n, &izero, &izero, &blacs_ctx, &lld, &info);
+    descinit_(&flocald, &n, &n, &nb, &nb, &izero, &izero, &blacs_ctx, &lld_local, &info);
+    pdgeadd_("N", &n, &n, &done, F.data, &ione, &ione, &fd, &dzero, f_local.data, &ione, &ione, &flocald);
 
-    // We are using row major upper triangular, but LAPACKE's dsyevx seems to have issues with row major,
-    // so column major with lower triangular is equivalent in symmetric matrices
-    int E = LAPACK_COL_MAJOR;
-    LAPACKE_dsyevx(E, 'V', 'I', 'L', F.w, F.data, F.w, -1.0, -1.0, 1, c + 1, 0.0, &found_eigenvalue_n, ev, eigenvectors, F.w, ifail);
+    // Call eigensolver. Eigenvalues are given in ascending order. We are responsible for freeing the returned buffers.
+    // We are using row major upper triangular, but since fortran uses column major, we indicate lower triangular,
+    // which is equivalent in symmetric matrices
+    double *eigenvectors, *eigenvalues;
+    gmc_pdsyevx('L', n, f_local.data, flocald, 1, c + 1, 0.0, &eigenvalues, &eigenvectors, &eigvecd);
 
-    // Ignore the (c+1)th eigenvector, we only need that for the eigenvalue
-    memcpy(F.data, eigenvectors, sizeof(double) * F.w * c);
-    F.h = c; 
+    // Collect eigenvectors into process 0, set height to only work with c eigvecs, c+1 is only needed for eigval
+    pdgeadd_("N", &n, &n, &done, eigenvectors, &ione, &ione, &eigvecd, &dzero, F.data, &ione, &ione, &fd);
+    F.h = c;
 
-    free(ifail);
+    if(!rank) memcpy(ev, eigenvalues, (c + 1) * sizeof(double));
+
+    free_matrix(f_local);
     free(eigenvectors);
+    free(eigenvalues);
     return F;
 }
 
