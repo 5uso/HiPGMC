@@ -46,6 +46,8 @@ int main(int argc, char *argv[]) {
     //print(r.U);
 
     free_gmc_result(r);
+    for(int i = 0; i < d.views; i++) free_matrix(X[i]);
+    free(X);
 
     return 0;
 }
