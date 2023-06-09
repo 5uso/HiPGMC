@@ -29,36 +29,6 @@ matrix sqr_dist(matrix m) {
     return d;
 }
 
-matrix init_sig(matrix x, uint k) {
-    matrix d = sqr_dist(x);
-
-    for(int j = 0; j < d.h; j++) {
-        heap h = new_heap(d.data + (j + 1) * d.w - (k + 2), k + 2);
-        for(int i = d.w - (k + 2) - 1; i >= 0; i--) {
-            if(d.data[j * d.w + i] < heap_max(h)) {
-                *h.data[0] = 0.0;
-                replace(&h, d.data + i + j * d.w);
-            }
-            else d.data[j * d.w + i] = 0.0;
-        }
-
-        *h.min = 0.0;
-        double ** max_arr = malloc(sizeof(double*) * (k + 1));
-        for(int i = 0; i < k + 1; i++) max_arr[i] = heap_pop(&h);
-        double b = k * *max_arr[0];
-        free_heap(h);
-
-        double sum = 0.0;
-        for(int i = k; i > 0; i--) sum += *max_arr[i];
-        b = b - sum + EPS;
-        
-        for(int i = k; i >= 0; i--) *max_arr[i] = (*max_arr[0] - *max_arr[i]) / b;
-        free(max_arr);
-    }
-
-    return d;
-}
-
 matrix update_u(matrix q) { // Height of q is m
     for(int j = 1; j < q.h; j++) {
         for(int i = 0; i < q.w; i++) q.data[i] += q.data[j * q.w + i];

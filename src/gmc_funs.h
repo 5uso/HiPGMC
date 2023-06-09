@@ -13,7 +13,6 @@
 #define EPS 2.2204460492503131e-16
 
 matrix sqr_dist(matrix m);
-matrix init_sig(matrix x, uint k);
 matrix update_u(matrix q);
 matrix update_f(matrix F, matrix U, double * ev, uint c);
 int connected_comp(bool * adj, int * y, int num);
