@@ -28,6 +28,33 @@ GMC_INTERNAL void __gmc_normalize(matrix * X, uint m, uint num) {
     }
 }
 
+GMC_INTERNAL void __gmc_init_s0(matrix * X, uint m, uint num, matrix * S0, matrix * ed, heap * idxx, double * sums) {
+    for(int v = 0; v < m; v++) {
+        ed[v] = sqr_dist(X[v]);
+        S0[v] = new_matrix(ed[v].w, ed[v].h);
+        long long offset = S0[v].data - ed[v].data;
+        memset(S0[v].data, 0x00, S0[v].w * S0[v].h * sizeof(double));
+
+        for(int y = 0; y < num; y++) {
+            ed[v].data[y * num + y] = INFINITY;
+            
+            heap h = new_heap(ed[v].data + y * num, PN + 1);
+            for(int x = PN + 1; x < num; x++)
+                if(ed[v].data[y * num + x] < heap_max(h))
+                    replace(&h, ed[v].data + y * num + x);
+                
+            idxx[v * num + y] = h;
+            sums[v * num + y] = block_sum_ptr(h.data + 1, PN, 0);
+
+            double denominator = *h.data[0] * PN - sums[v * num + y] + EPS;
+
+            for(int i = 1; i < PN + 1; i++) {
+                *(h.data[i] + offset) = (*h.data[0] - *h.data[i]) / denominator;
+            }
+        }
+    }
+}
+
 GMC_INTERNAL matrix __gmc_init_u(matrix * S0, uint m, uint num) {
     matrix U = new_matrix(num, num);
 
@@ -232,7 +259,10 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize, MPI_Co
         // Initialize SIG matrices
         GMC_STEP(printf("Init, SIG matrices\n"));
         S0 = malloc(m * sizeof(matrix));
-        for(int v = 0; v < m; v++) S0[v] = init_sig(X[v], PN);
+        ed = malloc(m * sizeof(matrix));
+        idxx = malloc(m * num * sizeof(heap));
+        sums = malloc(m * num * sizeof(double));
+        __gmc_init_s0(X, m, num, S0, ed, idxx, sums);
 
         // U starts as average of SIG matrices
         GMC_STEP(printf("Init, U\n"));
@@ -250,26 +280,6 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize, MPI_Co
         double wI = 1.0 / m;
         w = new_matrix(m, 1);
         for(int v = 0; v < m; v++) w.data[v] = wI;
-
-        // Used when calculating S0
-        GMC_STEP(printf("Init, S0 sort\n"));
-        ed = malloc(m * sizeof(matrix));
-        idxx = malloc(m * num * sizeof(heap));
-        sums = malloc(m * num * sizeof(double));
-        for(int v = 0; v < m; v++) {
-            ed[v] = sqr_dist(X[v]);
-            for(int y = 0; y < num; y++) {
-                ed[v].data[y * num + y] = INFINITY;
-                
-                heap h = new_heap(ed[v].data + y * num, PN + 1);
-                for(int x = PN + 1; x < num; x++)
-                    if(ed[v].data[y * num + x] < heap_max(h))
-                        replace(&h, ed[v].data + y * num + x);
-                    
-                idxx[v * num + y] = h;
-                sums[v * num + y] = block_sum_ptr(h.data + 1, PN, 0);
-            }
-        }
     } else {
         update_f(F, U, evs.data, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm);
     }
