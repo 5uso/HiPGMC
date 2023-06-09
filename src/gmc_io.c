@@ -24,6 +24,7 @@ matrix read_matrix(const char * path) {
         for(int x = 0; x < m.w; x++)
             fscanf(fd, "%lg", &m.data[y * m.w + x]);
 
+    fclose(fd);
     return m;
 }
 
@@ -61,5 +62,6 @@ matrix * read_dataset(const char * path) {
         data[i] = read_matrix(filepath);
     }
 
+    closedir(d);
     return data;
 }

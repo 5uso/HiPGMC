@@ -58,6 +58,8 @@ int main(int argc, char *argv[]) {
         printf("\n");
 
         free_gmc_result(r);
+        for(int i = 0; i < d.views; i++) free_matrix(X[i]);
+        free(X);
     } else {
         // Only rank 0 takes care of IO, other processes receive info from it
         gmc(NULL, 0, 0, 0, 0, MPI_COMM_WORLD, context);
