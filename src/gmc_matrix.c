@@ -18,3 +18,15 @@ void print(matrix m) {
         printf("\n");
     }
 }
+
+sparse_matrix new_sparse(uint w, uint h) {
+    sparse_matrix m;
+    m.w = w; m.h = h;
+    m.data = malloc(w * h * sizeof(sprs_val));
+
+    return m;
+}
+
+void free_sparse(sparse_matrix m) {
+    free(m.data);
+}

@@ -39,6 +39,21 @@ void dump_matrix(matrix m, const char * path) {
     }
 }
 
+void dump_sparse(sparse_matrix m, const char * path) {
+    matrix dense = new_matrix(m.h, m.h);
+    memset(dense.data, 0x00, m.h * m.h * sizeof(double));
+
+    for(int y = 0; y < m.h; y++) 
+        for(int i = 0; i < m.w; i++) {
+            sprs_val val = m.data[y * m.w + i];
+            int x = val.i;
+            dense.data[y * m.h + x] = val.value;
+        }
+
+    dump_matrix(dense, path);
+    free_matrix(dense);
+}
+
 matrix * read_dataset(const char * path) {
     int views = __count_dir_files(path);
     if(!views) return NULL;

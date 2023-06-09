@@ -12,7 +12,7 @@
 
 typedef struct gmc_result {
     matrix U;
-    matrix * S0;
+    sparse_matrix * S0;
     matrix F;
     matrix evs;
     int * y;
