@@ -19,7 +19,7 @@ void print(matrix m) {
     }
 }
 
-sparse_matrix new_sparse(uint w, uint h) {
+sparse_matrix new_sparse(int w, int h) {
     sparse_matrix m;
     m.w = w; m.h = h;
     m.data = malloc(w * h * sizeof(sprs_val));
