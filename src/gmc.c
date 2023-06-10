@@ -6,7 +6,9 @@ static MPI_Comm comm;
 static int blacs_row, blacs_col, blacs_height, blacs_width;
 static int blacs_ctx;
 
-GMC_INTERNAL void __gmc_normalize(matrix * X, uint m, uint num) {
+elpa_t handle;
+
+GMC_INTERNAL void __gmc_normalize(matrix * X, int m, int num) {
     for(int v = 0; v < m; v++) {
         int h = X[v].h, w = X[v].w;
         for(int x = 0; x < w; x++) {
@@ -28,7 +30,7 @@ GMC_INTERNAL void __gmc_normalize(matrix * X, uint m, uint num) {
     }
 }
 
-GMC_INTERNAL void __gmc_init_s0(matrix * X, uint m, uint num, sparse_matrix * S0, matrix * ed, double * sums) {
+GMC_INTERNAL void __gmc_init_s0(matrix * X, int m, int num, sparse_matrix * S0, matrix * ed, double * sums) {
     for(int v = 0; v < m; v++) {
         matrix ted = sqr_dist(X[v]);
         S0[v] = new_sparse(PN + 1, ted.h);
@@ -61,7 +63,7 @@ GMC_INTERNAL void __gmc_init_s0(matrix * X, uint m, uint num, sparse_matrix * S0
     }
 }
 
-GMC_INTERNAL matrix __gmc_init_u(sparse_matrix * S0, uint m, uint num) {
+GMC_INTERNAL matrix __gmc_init_u(sparse_matrix * S0, int m, int num) {
     matrix U = new_matrix(num, num);
 
     // U starts as average of SIG matrices
@@ -82,7 +84,7 @@ GMC_INTERNAL matrix __gmc_init_u(sparse_matrix * S0, uint m, uint num) {
     return U;
 }
 
-GMC_INTERNAL void __gmc_update_s0(sparse_matrix * S0, matrix U, matrix w, uint m, uint num, matrix * ed, double * sums) {
+GMC_INTERNAL void __gmc_update_s0(sparse_matrix * S0, matrix U, matrix w, int m, int num, matrix * ed, double * sums) {
     for(int v = 0; v < m; v++) {
         double weight = w.data[v] * 2.0;
 
@@ -108,7 +110,7 @@ GMC_INTERNAL void __gmc_update_s0(sparse_matrix * S0, matrix U, matrix w, uint m
     }
 }
 
-GMC_INTERNAL void __gmc_update_w(sparse_matrix * S0, matrix U, matrix w, uint m, uint num) {
+GMC_INTERNAL void __gmc_update_w(sparse_matrix * S0, matrix U, matrix w, int m, int num) {
     matrix US = new_matrix(num, num);
 
     for(int v = 0; v < m; v++) {
@@ -127,7 +129,7 @@ GMC_INTERNAL void __gmc_update_w(sparse_matrix * S0, matrix U, matrix w, uint m,
     free_matrix(US);
 }
 
-GMC_INTERNAL void __gmc_update_u(sparse_matrix * S0, matrix U, matrix w, matrix * F, uint m, uint num, double * lambda) {
+GMC_INTERNAL void __gmc_update_u(sparse_matrix * S0, matrix U, matrix w, matrix * F, int m, int num, double * lambda) {
     matrix dist = sqr_dist(*F); // F is transposed, since LAPACK returns it in column major
     int * idx = malloc(num * sizeof(int));
 
@@ -186,7 +188,7 @@ GMC_INTERNAL void __gmc_update_u(sparse_matrix * S0, matrix U, matrix w, matrix 
     free_matrix(dist);
 }
 
-GMC_INTERNAL bool __gmc_main_loop(int it, sparse_matrix * S0, matrix U, matrix w, matrix * F, matrix * F_old, matrix evs, uint m, uint c, uint num,
+GMC_INTERNAL bool __gmc_main_loop(int it, sparse_matrix * S0, matrix U, matrix w, matrix * F, matrix * F_old, matrix evs, int m, int c, int num,
                                   matrix * ed, double * sums, double * lambda) {
     bool end_iteration = false;
     double * ev = NULL;
@@ -210,7 +212,7 @@ GMC_INTERNAL bool __gmc_main_loop(int it, sparse_matrix * S0, matrix U, matrix w
         *F_old = *F;
         *F = temp;
         ev = evs.data + (c + 1) * it;
-        *F = update_f(*F, U, ev, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm);
+        *F = update_f(*F, U, ev, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm, handle);
 
         // Update lambda
         GMC_STEP(printf("Iteration %d, update lambda\n", it));
@@ -227,14 +229,14 @@ GMC_INTERNAL bool __gmc_main_loop(int it, sparse_matrix * S0, matrix U, matrix w
             end_iteration = true;
         }
     } else {
-        update_f(*F, U, ev, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm);
+        update_f(*F, U, ev, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm, handle);
     }
     
     MPI_Bcast(&end_iteration, 1, MPI_C_BOOL, 0, comm);
     return end_iteration;
 }
 
-gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize, MPI_Comm in_comm, int in_context) {
+gmc_result gmc(matrix * X, int m, int c, double lambda, bool normalize, MPI_Comm in_comm, int in_context) {
     sparse_matrix *S0 = NULL; double *sums = NULL;   
     matrix *ed = NULL, U, F, F_old, evs, w;
 
@@ -248,7 +250,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize, MPI_Co
     Cblacs_gridinfo(blacs_ctx, &blacs_height, &blacs_width, &blacs_row, &blacs_col);
 
     // Broadcast parameters to all processes in the group
-    struct { uint m, c, n; double l; bool norm; } params = {
+    struct { int m, c, n; double l; bool norm; } params = {
         .m = m,
         .c = c,
         .n = rank ? 0 : X[0].w,
@@ -258,7 +260,35 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize, MPI_Co
 
     MPI_Bcast(&params, sizeof(params), MPI_BYTE, 0, comm);
     m = params.m, c = params.c, lambda = params.l, normalize = params.norm;
-    uint num = params.n;
+    int num = params.n, nb = BLOCK_SIZE, izero = 0;
+
+    // Set up ELPA
+    int error;
+    if (elpa_init(ELPA_API_VER) != ELPA_OK) {
+        fprintf(stderr, "{ %d, %d } Error: ELPA API version not supported\n", blacs_row, blacs_col);
+        exit(1);
+    }
+
+    handle = elpa_allocate(&error);
+    elpa_set(handle, "na", num, &error);
+    elpa_set(handle, "nev", c + 1, &error);
+    elpa_set(handle, "nblk", nb, &error);
+    elpa_set(handle, "mpi_comm_parent", MPI_Comm_c2f(comm), &error);
+    elpa_set(handle, "process_row", blacs_row, &error);
+    elpa_set(handle, "process_col", blacs_col, &error);
+    elpa_set(handle, "blacs_context", blacs_ctx, &error);
+
+    int mp = numroc_(&num, &nb, &blacs_row, &izero, &blacs_height);
+    int nq = numroc_(&num, &nb, &blacs_col, &izero, &blacs_width);
+    elpa_set(handle, "local_nrows", mp, &error);
+    elpa_set(handle, "local_ncols", nq, &error);
+
+    error = elpa_setup(handle);
+
+    elpa_set(handle, "gpu", 1, &error);
+    if(!rank && error != ELPA_OK) {
+        fprintf(stderr, "Warning: ELPA GPU acceleration not supported\n");
+    }
 
     if(!rank) {
         // Normalize data
@@ -281,7 +311,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize, MPI_Co
         F = new_matrix(num, num);
         F_old = new_matrix(num, num);
         evs = new_matrix(c + 1, NITER + 1);
-        F = update_f(F, U, evs.data, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm);
+        F = update_f(F, U, evs.data, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm, handle);
 
         // Initialize w to m uniform (All views start with the same weight)
         GMC_STEP(printf("Init, w\n"));
@@ -289,7 +319,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize, MPI_Co
         w = new_matrix(m, 1);
         for(int v = 0; v < m; v++) w.data[v] = wI;
     } else {
-        update_f(F, U, evs.data, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm);
+        update_f(F, U, evs.data, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm, handle);
     }
 
     // Main loop
@@ -321,6 +351,9 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize, MPI_Co
     for(int i = 0; i < m; i++) free_matrix(ed[i]);
     free_matrix(F_old); free_matrix(w);
     free(sums); free(ed); free(adj);
+
+    elpa_deallocate(handle, &error);
+    elpa_uninit(&error);
 
     // Build output struct
     gmc_result result;

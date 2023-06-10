@@ -6,11 +6,11 @@
 
 typedef struct heap {
     double ** data;
-    uint      size;
+    int      size;
     double *   min;
 } heap;
 
-heap new_heap(double * data, uint size);
+heap new_heap(double * data, int size);
 void free_heap(heap h);
 double heap_max(heap h);
 double heap_min(heap h);

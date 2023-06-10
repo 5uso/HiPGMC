@@ -16,7 +16,7 @@ int __count_dir_files(const char * path) {
 matrix read_matrix(const char * path) {
     FILE * fd = fopen(path, "r");
 
-    uint w, h;
+    int w, h;
     fscanf(fd, "%u %u", &w, &h);
     matrix m = new_matrix(w, h);
 

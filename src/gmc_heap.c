@@ -1,10 +1,10 @@
 #include "gmc_heap.h"
 
-void sift_down(heap h, uint i) {
-    uint l = 2 * i;
-    uint r = l + 1;
+void sift_down(heap h, int i) {
+    int l = 2 * i;
+    int r = l + 1;
 
-    uint max = i;
+    int max = i;
     if(l < h.size && *h.data[l] > *h.data[max]) max = l;
     if(r < h.size && *h.data[r] > *h.data[max]) max = r;
 
@@ -17,7 +17,7 @@ void sift_down(heap h, uint i) {
     }
 }
 
-heap new_heap(double * data, uint size) {
+heap new_heap(double * data, int size) {
     heap h;
     h.data = malloc(sizeof(double*) * size);
     h.size = size;

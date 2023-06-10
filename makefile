@@ -1,5 +1,5 @@
 FLAGS = -Wall -O3
-LINK = -lopenblas -lm -ldl -lscalapack-openmpi
+LINK = -lopenblas -lm -ldl -lscalapack-openmpi -lelpa
 SUBDIR = bin/
 SRC = src/
 OUT = out/

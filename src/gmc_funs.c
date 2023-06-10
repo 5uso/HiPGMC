@@ -79,7 +79,7 @@ matrix update_u(matrix q) { // Height of q is m
 }
 
 matrix update_f(matrix F, matrix U, double * ev, int c, int rank, int blacs_row, int blacs_col, int blacs_height, int blacs_width, int blacs_ctx,
-                MPI_Comm comm) {
+                MPI_Comm comm, elpa_t handle) {
     int izero = 0, ione = 1, nb = BLOCK_SIZE, info;
     double done = 1.0, dzero = 0.0;
     arr_desc fd, flocald, eigvecd;
@@ -90,7 +90,7 @@ matrix update_f(matrix F, matrix U, double * ev, int c, int rank, int blacs_row,
     if(!rank) {
         for(int y = 0; y < U.w; y++) {
             for(int x = y; x < U.w; x++)
-                F.data[y * U.w + x] = (U.data[y * U.w + x] + U.data[x * U.w + y]) / -2.0;
+                F.data[y * U.w + x] = F.data[x * U.w + y] = (U.data[y * U.w + x] + U.data[x * U.w + y]) / -2.0;
                 
             F.data[y * U.w + y] -= block_sum(F.data + y * U.w + y + 1, U.w - y - 1) + block_sum_col(F.data + y, y, U.w);
         }
@@ -113,8 +113,11 @@ matrix update_f(matrix F, matrix U, double * ev, int c, int rank, int blacs_row,
     // Call eigensolver. Eigenvalues are given in ascending order. We are responsible for freeing the returned buffers.
     // We are using row major upper triangular, but since fortran uses column major, we indicate lower triangular,
     // which is equivalent in symmetric matrices
-    double *eigenvectors, *eigenvalues;
-    gmc_pdsyevx('L', n, f_local.data, flocald, 1, c + 1, 0.0, &eigenvalues, &eigenvectors, &eigvecd);
+    double *eigenvectors, *eigenvalues; int error;
+    //gmc_pdsyevx('L', n, f_local.data, flocald, 1, c + 1, 0.0, &eigenvalues, &eigenvectors, &eigvecd);
+    eigvecd = flocald;
+    eigenvalues = malloc(n * sizeof(double)), eigenvectors = malloc(mp * nq * sizeof(double));
+    elpa_eigenvectors(handle, f_local.data, eigenvalues, eigenvectors, &error);
 
     // Collect eigenvectors into process 0, set height to only work with c eigvecs, c+1 is only needed for eigval
     pdgeadd_("N", &n, &n, &done, eigenvectors, &ione, &ione, &eigvecd, &dzero, F.data, &ione, &ione, &fd);

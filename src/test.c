@@ -8,8 +8,8 @@
 
 typedef struct dataset {
     const char * path;
-    uint views;
-    uint clusters;
+    int views;
+    int clusters;
     double lambda;
     bool normalize;
 } dataset;
@@ -29,12 +29,12 @@ int main(int argc, char *argv[]) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
     // BLACS Initialization
-    int context, blacs_rows = 2, blacs_cols = 2;
+    int context, blacs_rows = 1, blacs_cols = 1;
     Cblacs_get(0, 0, &context);
-    Cblacs_gridinit(&context, "Row-major", blacs_rows, blacs_cols);
+    Cblacs_gridinit(&context, "C", blacs_rows, blacs_cols);
 
     if(!rank) {
-        dataset d = data[0];
+        dataset d = data[2];
         printf("Loading dataset from '%s'\n", d.path);
         matrix * X = read_dataset(d.path);
         if(!X) {
