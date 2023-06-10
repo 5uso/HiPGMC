@@ -9,11 +9,19 @@ typedef struct matrix {
     double *  data;     // Matrix contents
 } matrix;
 
+typedef struct sprs_val {
+    int i; double value;
+} sprs_val;
+
+typedef struct sparse_matrix {
+    int w; int h;     // Width & Height (width is the number of non zero elements per row)
+    sprs_val *data;     // Matrix contents
+} sparse_matrix;
+
 matrix new_matrix(int w, int h);
 void free_matrix(matrix m);
-double get(matrix m, int i, int j);
-void set(matrix m, int i, int j, double val);
-double * get_row(matrix m, int j);
 void print(matrix m);
+sparse_matrix new_sparse(int w, int h);
+void free_sparse(sparse_matrix m);
 
 #endif

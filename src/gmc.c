@@ -28,90 +28,97 @@ GMC_INTERNAL void __gmc_normalize(matrix * X, uint m, uint num) {
     }
 }
 
-GMC_INTERNAL void __gmc_init_s0(matrix * X, uint m, uint num, matrix * S0, matrix * ed, heap * idxx, double * sums) {
+GMC_INTERNAL void __gmc_init_s0(matrix * X, uint m, uint num, sparse_matrix * S0, matrix * ed, double * sums) {
     for(int v = 0; v < m; v++) {
-        ed[v] = sqr_dist(X[v]);
-        S0[v] = new_matrix(ed[v].w, ed[v].h);
-        long long offset = S0[v].data - ed[v].data;
-        memset(S0[v].data, 0x00, S0[v].w * S0[v].h * sizeof(double));
+        matrix ted = sqr_dist(X[v]);
+        S0[v] = new_sparse(PN + 1, ted.h);
+        ed[v] = new_matrix(PN + 1, ted.h);
 
         for(int y = 0; y < num; y++) {
-            ed[v].data[y * num + y] = INFINITY;
+            ted.data[y * num + y] = INFINITY;
             
-            heap h = new_heap(ed[v].data + y * num, PN + 1);
+            heap h = new_heap(ted.data + y * num, PN + 1);
             for(int x = PN + 1; x < num; x++)
-                if(ed[v].data[y * num + x] < heap_max(h))
-                    replace(&h, ed[v].data + y * num + x);
+                if(ted.data[y * num + x] < heap_max(h))
+                    replace(&h, ted.data + y * num + x);
                 
-            idxx[v * num + y] = h;
             sums[v * num + y] = block_sum_ptr(h.data + 1, PN, 0);
-
             double denominator = *h.data[0] * PN - sums[v * num + y] + EPS;
 
-            for(int i = 1; i < PN + 1; i++) {
-                *(h.data[i] + offset) = (*h.data[0] - *h.data[i]) / denominator;
+            for(int i = 0; i < PN + 1; i++) {
+                sprs_val val = {
+                    .i = h.data[i] - (ted.data + y * num),
+                    .value = ((*h.data[0] - *h.data[i]) / denominator) * (i > 0),
+                };
+                S0[v].data[y * (PN + 1) + i] = val;
+                ed[v].data[y * (PN + 1) + i] = *h.data[i];
             }
+
+            free_heap(h);
         }
+
+        free_matrix(ted);
     }
 }
 
-GMC_INTERNAL matrix __gmc_init_u(matrix * S0, uint m, uint num) {
+GMC_INTERNAL matrix __gmc_init_u(sparse_matrix * S0, uint m, uint num) {
     matrix U = new_matrix(num, num);
 
     // U starts as average of SIG matrices
-    memcpy(U.data, S0[0].data, num * num * sizeof(double));
+    memset(U.data, 0x00, num * num * sizeof(double));
 
-    for(int v = 1; v < m; v++)
-        for(int y = 0; y < num; y++)
-            for(int x = 0; x < num; x++)
-                U.data[y * num + x] += S0[v].data[y * num + x];
-
-    for(int y = 0; y < num; y++)
-        for(int x = 0; x < num; x++)
-            U.data[y * num + x] /= m;
-
-    // Divide each row of U by its own sum
     for(int y = 0; y < num; y++) {
-        double sum = block_sum(U.data + y * num, num);
+        double sum = 0.0;
+        for(int i = 0; i < PN + 1; i++)
+            for(int v = 0; v < m; v++) {
+                sprs_val val = S0[v].data[y * (PN + 1) + i];
+                double t = val.value / m;
+                U.data[y * num + val.i] += t;
+                sum += t;
+            }
         for(int x = 0; x < num; x++) U.data[y * num + x] /= sum;
     }
 
     return U;
 }
 
-GMC_INTERNAL void __gmc_update_s0(matrix * S0, matrix U, matrix w, uint m, uint num, matrix * ed, heap * idxx, double * sums) {
+GMC_INTERNAL void __gmc_update_s0(sparse_matrix * S0, matrix U, matrix w, uint m, uint num, matrix * ed, double * sums) {
     for(int v = 0; v < m; v++) {
-        memset(S0[v].data, 0x00, num * num * sizeof(double));
-        long long offsetU = U.data - ed[v].data;
-        long long offsetS = S0[v].data - ed[v].data;
         double weight = w.data[v] * 2.0;
 
         for(int y = 0; y < num; y++) {
-            heap h = idxx[v * num + y];
-            double max = heap_max(h);
-            double maxU = *(offsetU + h.data[0]);
+            double max = ed[v].data[(PN + 1) * y];
+            double maxU = U.data[y * num + S0[v].data[(PN + 1) * y].i];
 
-            double sumU = block_sum_ptr(h.data + 1, PN, offsetU);
+            double sumU = 0.0;
+            for(int i = 1; i < PN + 1; i++) {
+                int x = S0[v].data[y * (PN + 1) + i].i;
+                sumU += U.data[y * num + x];
+            }
 
             double numerator = max - weight * maxU;
             double denominator = PN * max - sums[v * num + y] + weight * (sumU - PN * maxU) + EPS;
 
-            for(int x = 0; x < PN + 1; x++) {
-                double r = (numerator - *h.data[x] + weight * *(offsetU + h.data[x])) / denominator;
-                *(offsetS + h.data[x]) = r * (r > 0.0);
+            for(int i = 0; i < PN + 1; i++) {
+                int x = S0[v].data[y * (PN + 1) + i].i;
+                double r = (numerator - ed[v].data[(PN + 1) * y + i] + weight * U.data[y * num + x]) / denominator;
+                S0[v].data[y * (PN + 1) + i].value = r * (r > 0.0);
             }
         }
     }
 }
 
-GMC_INTERNAL void __gmc_update_w(matrix * S0, matrix U, matrix w, uint m, uint num) {
+GMC_INTERNAL void __gmc_update_w(sparse_matrix * S0, matrix U, matrix w, uint m, uint num) {
     matrix US = new_matrix(num, num);
 
     for(int v = 0; v < m; v++) {
         memcpy(US.data, U.data, num * num * sizeof(double));
         for(int y = 0; y < num; y++)
-            for(int x = 0; x < num; x++)
-                US.data[y * num + x] -= S0[v].data[y * num + x];
+            for(int i = 0; i < PN + 1; i++) {
+                sprs_val val = S0[v].data[y * (PN + 1) + i];
+                int x = val.i;
+                US.data[y * num + x] -= val.value;
+            }
 
         double distUS = LAPACKE_dlange(LAPACK_COL_MAJOR, 'F', num, num, US.data, num);
         w.data[v] = 0.5 / (distUS + EPS);
@@ -120,28 +127,26 @@ GMC_INTERNAL void __gmc_update_w(matrix * S0, matrix U, matrix w, uint m, uint n
     free_matrix(US);
 }
 
-GMC_INTERNAL void __gmc_update_u(matrix * S0, matrix U, matrix w, matrix * F, uint m, uint num, double * lambda) {
+GMC_INTERNAL void __gmc_update_u(sparse_matrix * S0, matrix U, matrix w, matrix * F, uint m, uint num, double * lambda) {
     matrix dist = sqr_dist(*F); // F is transposed, since LAPACK returns it in column major
-    bool * idx = malloc(num * sizeof(bool));
+    int * idx = malloc(num * sizeof(int));
 
     for(int y = 0; y < num; y++) {
         int qw = 0;
 
         #ifdef IS_LOCAL
-            for(int x = 0; x < num; x++) {
-                idx[x] = (S0[0].data[y * num + x] > 0);
-                qw += idx[x];
-            }
-
-            for(int v = 1; v < m; v++) {
-                for(int x = 0; x < num; x++) {
+            memset(idx, 0x00, num * sizeof(int));
+            for(int v = 0; v < m; v++) {
+                for(int i = 0; i < PN + 1; i++) {
+                    sprs_val val = S0[v].data[y * (PN + 1) + i];
+                    int x = val.i;
                     qw -= idx[x];
-                    idx[x] |= (S0[v].data[y * num + x] > 0);
+                    idx[x] |= (val.value > 0);
                     qw += idx[x];
                 }
             }
         #else
-            memset(idx, 0x01, num * sizeof(bool));
+            memset(idx, 0x01, num * sizeof(int));
             qw = num;
         #endif
 
@@ -150,18 +155,22 @@ GMC_INTERNAL void __gmc_update_u(matrix * S0, matrix U, matrix w, matrix * F, ui
             if(idx[x]) {
                 q.data[i] = *lambda * dist.data[y * num + x] / (double) m * -0.5;
                 i++;
+                idx[x] = i;
             } 
         }
 
+        for(int v = m - 1; v >= 0; v--)
+            for(int i = 0; i < qw; i++)
+                q.data[v * qw + i] = q.data[i] / w.data[v];
+
         for(int v = m - 1; v >= 0; v--) {
-            for(int x = 0, i = 0; x < num; x++) {
-                if(idx[x]) {
-                    q.data[v * qw + i] = q.data[i] / w.data[v] + S0[v].data[y * num + x];
-                    i++;
-                }
+            for(int i = 0; i < PN + 1; i++) {
+                sprs_val val = S0[v].data[y * (PN + 1) + i];
+                int x = val.i;
+                if(idx[x]) q.data[v * qw + idx[x] - 1] += val.value;
             }
         }
-        
+
         q = update_u(q);
         for(int x = 0, i = 0; x < num; x++) {
             if(idx[x]) {
@@ -177,15 +186,15 @@ GMC_INTERNAL void __gmc_update_u(matrix * S0, matrix U, matrix w, matrix * F, ui
     free_matrix(dist);
 }
 
-GMC_INTERNAL bool __gmc_main_loop(int it, matrix * S0, matrix U, matrix w, matrix * F, matrix * F_old, matrix evs, uint m, uint c, uint num,
-                                  matrix * ed, heap * idxx, double * sums, double * lambda) {
+GMC_INTERNAL bool __gmc_main_loop(int it, sparse_matrix * S0, matrix U, matrix w, matrix * F, matrix * F_old, matrix evs, uint m, uint c, uint num,
+                                  matrix * ed, double * sums, double * lambda) {
     bool end_iteration = false;
     double * ev = NULL;
 
     if(!rank) {
         // Update S0
         GMC_STEP(printf("Iteration %d, update S0\n", it));
-        __gmc_update_s0(S0, U, w, m, num, ed, idxx, sums);
+        __gmc_update_s0(S0, U, w, m, num, ed, sums);
 
         // Update w
         GMC_STEP(printf("Iteration %d, update w\n", it));
@@ -226,8 +235,8 @@ GMC_INTERNAL bool __gmc_main_loop(int it, matrix * S0, matrix U, matrix w, matri
 }
 
 gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize, MPI_Comm in_comm, int in_context) {
-    matrix *S0 = NULL, *ed = NULL, U, F, F_old, evs, w;
-    heap *idxx = NULL; double *sums = NULL;    
+    sparse_matrix *S0 = NULL; double *sums = NULL;   
+    matrix *ed = NULL, U, F, F_old, evs, w;
 
     // Get MPI info
     comm = in_comm;
@@ -258,11 +267,10 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize, MPI_Co
 
         // Initialize SIG matrices
         GMC_STEP(printf("Init, SIG matrices\n"));
-        S0 = malloc(m * sizeof(matrix));
+        S0 = malloc(m * sizeof(sparse_matrix));
         ed = malloc(m * sizeof(matrix));
-        idxx = malloc(m * num * sizeof(heap));
         sums = malloc(m * num * sizeof(double));
-        __gmc_init_s0(X, m, num, S0, ed, idxx, sums);
+        __gmc_init_s0(X, m, num, S0, ed, sums);
 
         // U starts as average of SIG matrices
         GMC_STEP(printf("Init, U\n"));
@@ -287,7 +295,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize, MPI_Co
     // Main loop
     int it;
     for(it = 0; it < NITER; it++)
-        if(__gmc_main_loop(it, S0, U, w, &F, &F_old, evs, m, c, num, ed, idxx, sums, &lambda))
+        if(__gmc_main_loop(it, S0, U, w, &F, &F_old, evs, m, c, num, ed, sums, &lambda))
             break;
 
     // Workers return before final clustering
@@ -311,9 +319,8 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize, MPI_Co
     // Cleanup
     GMC_STEP(printf("End, cleanup\n"));
     for(int i = 0; i < m; i++) free_matrix(ed[i]);
-    for(int i = 0; i < m * num; i++) free_heap(idxx[i]);
     free_matrix(F_old); free_matrix(w);
-    free(sums); free(idxx); free(ed); free(adj);
+    free(sums); free(ed); free(adj);
 
     // Build output struct
     gmc_result result;
@@ -324,7 +331,7 @@ gmc_result gmc(matrix * X, uint m, uint c, double lambda, bool normalize, MPI_Co
 
 void free_gmc_result(gmc_result r) {
     free_matrix(r.U);
-    for(int i = 0; i < r.m; i++) free_matrix(r.S0[i]);
+    for(int i = 0; i < r.m; i++) free_sparse(r.S0[i]);
     free(r.S0);
     free_matrix(r.F);
     free_matrix(r.evs);
