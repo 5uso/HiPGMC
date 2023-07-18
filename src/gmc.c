@@ -285,8 +285,13 @@ gmc_result gmc(matrix * X, int m, int c, double lambda, bool normalize, MPI_Comm
 
     error = elpa_setup(handle);
 
-    elpa_set(handle, "gpu", 1, &error);
-    if(!rank && error != ELPA_OK) {
+    elpa_set(handle, "nvidia-gpu", 1, &error);
+    if(error == ELPA_OK) {
+        elpa_set(handle, "solver", ELPA_SOLVER_2STAGE, &error);
+        if(!rank && error != ELPA_OK) printf("can't set 2stage\n");
+        elpa_set(handle, "real_kernel", ELPA_2STAGE_REAL_NVIDIA_GPU, &error);
+        if(!rank && error != ELPA_OK) printf("can't set gpu kernel\n");
+    } else if(!rank) {
         fprintf(stderr, "Warning: ELPA GPU acceleration not supported\n");
     }
 
