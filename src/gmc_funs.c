@@ -1,6 +1,6 @@
 #include "gmc_funs.h"
 
-static inline int max(int a, int b) {
+inline int max(int a, int b) {
     return b > a ? b : a;
 }
 
@@ -79,7 +79,7 @@ matrix update_u(matrix q) { // Height of q is m
 }
 
 matrix update_f(matrix F, matrix U, double * ev, int c, int rank, int blacs_row, int blacs_col, int blacs_height, int blacs_width, int blacs_ctx,
-                MPI_Comm comm, elpa_t handle) {
+                MPI_Comm comm, elpa_t handle, int * counts, int * displs) {
     int izero = 0, ione = 1, nb = BLOCK_SIZE, info;
     double done = 1.0, dzero = 0.0;
     arr_desc fd, flocald, eigvecd;
@@ -87,12 +87,15 @@ matrix update_f(matrix F, matrix U, double * ev, int c, int rank, int blacs_row,
     int n = F.w;
     MPI_Bcast(&n, 1, MPI_INT, 0, comm);
 
+    // Gather U into rank 0
+    MPI_Gatherv(U.data, counts[rank], MPI_DOUBLE, F.data, counts, displs, MPI_DOUBLE, 0, comm);
+
     if(!rank) {
-        for(int y = 0; y < U.w; y++) {
-            for(int x = y; x < U.w; x++)
-                F.data[y * U.w + x] = F.data[x * U.w + y] = (U.data[y * U.w + x] + U.data[x * U.w + y]) / -2.0;
+        for(int y = 0; y < F.w; y++) {
+            for(int x = y; x < F.w; x++)
+                F.data[y * F.w + x] = F.data[x * F.w + y] = (F.data[y * F.w + x] + F.data[x * F.w + y]) / -2.0;
                 
-            F.data[y * U.w + y] -= block_sum(F.data + y * U.w + y + 1, U.w - y - 1) + block_sum_col(F.data + y, y, U.w);
+            F.data[y * F.w + y] -= block_sum(F.data + y * F.w + y + 1, F.w - y - 1) + block_sum_col(F.data + y, y, F.w);
         }
     }
     

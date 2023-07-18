@@ -29,12 +29,12 @@ int main(int argc, char *argv[]) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
     // BLACS Initialization
-    int context, blacs_rows = 1, blacs_cols = 1;
+    int context, blacs_rows = 2, blacs_cols = 2;
     Cblacs_get(0, 0, &context);
     Cblacs_gridinit(&context, "C", blacs_rows, blacs_cols);
 
     if(!rank) {
-        dataset d = data[2];
+        dataset d = data[0];
         printf("Loading dataset from '%s'\n", d.path);
         matrix * X = read_dataset(d.path);
         if(!X) {
@@ -65,6 +65,7 @@ int main(int argc, char *argv[]) {
         gmc(NULL, 0, 0, 0, 0, MPI_COMM_WORLD, context);
     } 
     
+    Cblacs_gridexit(context);
     MPI_Finalize();
     return 0;
 }

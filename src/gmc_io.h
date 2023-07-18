@@ -8,7 +8,7 @@
 
 matrix read_matrix(const char * path);
 void dump_matrix(matrix m, const char * path);
-void dump_sparse(sparse_matrix m, const char * path);
+void dump_sparse(sparse_matrix m, const char * path, int width);
 matrix * read_dataset(const char * path);
 
 #endif

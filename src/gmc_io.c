@@ -37,17 +37,19 @@ void dump_matrix(matrix m, const char * path) {
             fprintf(fd, "%.17lg ", m.data[y * m.w + x]);
         fprintf(fd, "%.17lg\n", m.data[y * m.w + m.w - 1]);
     }
+
+    fclose(fd);
 }
 
-void dump_sparse(sparse_matrix m, const char * path) {
-    matrix dense = new_matrix(m.h, m.h);
-    memset(dense.data, 0x00, m.h * m.h * sizeof(double));
+void dump_sparse(sparse_matrix m, const char * path, int width) {
+    matrix dense = new_matrix(width, m.h);
+    memset(dense.data, 0x00, width * m.h * sizeof(double));
 
     for(int y = 0; y < m.h; y++) 
         for(int i = 0; i < m.w; i++) {
             sprs_val val = m.data[y * m.w + i];
             int x = val.i;
-            dense.data[y * m.h + x] = val.value;
+            dense.data[y * width + x] = val.value;
         }
 
     dump_matrix(dense, path);
