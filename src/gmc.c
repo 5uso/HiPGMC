@@ -149,7 +149,7 @@ GMC_INTERNAL void __gmc_update_w(sparse_matrix * S0, matrix U, matrix w, int m, 
         pdgeadd_("N", &num, &num, &done, US_global.data, &ione, &ione, &desca, &dzero, US_local.data, &ione, &ione, &desca_local);
 
         // Compute frobenius norm in parallel
-        double distUS = pdlange_("F", &num, &num, US_local.data, &izero, &izero, &desca_local, NULL);
+        double distUS = pdlange_("F", &num, &num, US_local.data, &ione, &ione, &desca_local, NULL);
         w.data[v] = 0.5 / (distUS + EPS);
     }
 
