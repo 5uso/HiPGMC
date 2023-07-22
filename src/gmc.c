@@ -124,16 +124,12 @@ GMC_INTERNAL void __gmc_update_w(sparse_matrix * S0, matrix U, matrix w, int m, 
     matrix US = new_matrix(num, pattern_cnts[rank]);
     matrix US_global; if(!rank) US_global = new_matrix(num, num);
 
-    // Set up distributed array descriptors
-    arr_desc desca, desca_local; int nb = BLOCK_SIZE, izero = 0, ione = 1, info;
-    double done = 1.0, dzero = 0.0;
+    // Set up distributed array descriptor
+    arr_desc desca_local; int nb = BLOCK_SIZE, izero = 0, ione = 1, info;
     int mp = numroc_(&num, &nb, &blacs_row, &izero, &blacs_height);
     int nq = numroc_(&num, &nb, &blacs_col, &izero, &blacs_width);
     matrix US_local = new_matrix(mp, nq);
-    int lld = max(1, numroc_(&num, &num, &blacs_row, &izero, &blacs_height));
-    int lld_local = max(1, mp);
-    descinit_(&desca, &num, &num, &num, &num, &izero, &izero, &blacs_ctx, &lld, &info);
-    descinit_(&desca_local, &num, &num, &nb, &nb, &izero, &izero, &blacs_ctx, &lld_local, &info);
+    descinit_(&desca_local, &num, &num, &nb, &nb, &izero, &izero, &blacs_ctx, &mp, &info);
 
     for(int v = 0; v < m; v++) {
         memcpy(US.data, U.data, num * pattern_cnts[rank] * sizeof(double));
@@ -146,7 +142,7 @@ GMC_INTERNAL void __gmc_update_w(sparse_matrix * S0, matrix U, matrix w, int m, 
 
         // Redistribute matrix from row to block cyclic
         MPI_Gatherv(US.data, counts[rank], MPI_DOUBLE, US_global.data, counts, displs, MPI_DOUBLE, 0, comm);
-        pdgeadd_("N", &num, &num, &done, US_global.data, &ione, &ione, &desca, &dzero, US_local.data, &ione, &ione, &desca_local);
+        gmc_distribute(num, num, US_global.data, US_local.data, blacs_row, blacs_col, blacs_width, blacs_height, nb, rank, comm);
 
         // Compute frobenius norm in parallel
         double distUS = pdlange_("F", &num, &num, US_local.data, &ione, &ione, &desca_local, NULL);

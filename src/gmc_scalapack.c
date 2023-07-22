@@ -60,3 +60,83 @@ int gmc_pdsyevx(char uplo, int n, double * a, arr_desc desca, int il, int iu, do
 
     return info;
 }
+
+void gmc_distribute(int w, int h, double * a, double * b, int blacs_row, int blacs_col, int blacs_width, int blacs_height, int nb, int rank, MPI_Comm comm) {
+    // Configure 2D block-cyclic distribution
+    int numprocs = blacs_width * blacs_height, pos = 0, izero = 0;
+    int global_dims[] = { w, h };
+    int distr_modes[] = { MPI_DISTRIBUTE_CYCLIC, MPI_DISTRIBUTE_CYCLIC };
+    int distr_block[] = { nb, nb };
+    int procgr_dims[] = { blacs_width, blacs_height };
+
+    // Dimensions of local matrix
+    int mp = numroc_(&h, &nb, &blacs_row, &izero, &blacs_height);
+    int nq = numroc_(&w, &nb, &blacs_col, &izero, &blacs_width);
+
+    if(!rank) {
+        #pragma omp parallel for
+        for(int r = 0; r < numprocs; r++) {
+            MPI_Datatype distr_arr;
+            if(!r) {
+                // Pack distribution for root process
+                MPI_Type_create_darray(numprocs, 0, 2, global_dims, distr_modes, distr_block, procgr_dims, MPI_ORDER_C, MPI_DOUBLE, &distr_arr);
+                MPI_Type_commit(&distr_arr);
+                MPI_Pack(a, 1, distr_arr, b, mp * nq * sizeof(double), &pos, comm);
+                MPI_Type_free(&distr_arr);
+                continue;
+            }
+
+            // Send corresponding data to another process
+            MPI_Type_create_darray(numprocs, r, 2, global_dims, distr_modes, distr_block, procgr_dims, MPI_ORDER_C, MPI_DOUBLE, &distr_arr);
+            MPI_Type_commit(&distr_arr);
+            MPI_Send(a, 1, distr_arr, r, 2711, comm);
+            MPI_Type_free(&distr_arr);
+        }
+
+        return;
+    }
+
+    // Receive from root process as contiguous array
+    MPI_Status stat;
+    MPI_Recv(b, mp * nq, MPI_DOUBLE, 0, 2711, comm, &stat);
+}
+
+void gmc_collect(int w, int h, double * a, double * b, int blacs_row, int blacs_col, int blacs_width, int blacs_height, int nb, int rank, MPI_Comm comm) {
+    // Configure 2D block-cyclic distribution
+    int numprocs = blacs_width * blacs_height, pos = 0, izero = 0;
+    int global_dims[] = { w, h };
+    int distr_modes[] = { MPI_DISTRIBUTE_CYCLIC, MPI_DISTRIBUTE_CYCLIC };
+    int distr_block[] = { nb, nb };
+    int procgr_dims[] = { blacs_width, blacs_height };
+
+    // Dimensions of local matrix
+    int mp = numroc_(&h, &nb, &blacs_row, &izero, &blacs_height);
+    int nq = numroc_(&w, &nb, &blacs_col, &izero, &blacs_width);
+
+    if(!rank) {
+        #pragma omp parallel for
+        for(int r = 0; r < numprocs; r++) {
+            MPI_Datatype distr_arr;
+            if(!r) {
+                // Unpack root process elements back into global matrix
+                MPI_Type_create_darray(numprocs, 0, 2, global_dims, distr_modes, distr_block, procgr_dims, MPI_ORDER_C, MPI_DOUBLE, &distr_arr);
+                MPI_Type_commit(&distr_arr);
+                MPI_Unpack(a, mp * nq * sizeof(double), &pos, b, 1, distr_arr, comm);
+                MPI_Type_free(&distr_arr);
+                continue;
+            }
+
+            // Receive from each process and place into the global matrix
+            MPI_Type_create_darray(numprocs, r, 2, global_dims, distr_modes, distr_block, procgr_dims, MPI_ORDER_C, MPI_DOUBLE, &distr_arr);
+            MPI_Type_commit(&distr_arr);
+            MPI_Status stat;
+            MPI_Recv(b, 1, distr_arr, r, 2712, comm, &stat);
+            MPI_Type_free(&distr_arr);
+        }
+
+        return;
+    }
+
+    // Send data to root process as contiguous array
+    MPI_Send(a, mp * nq, MPI_DOUBLE, 0, 2712, comm);
+}

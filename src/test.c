@@ -15,18 +15,24 @@ typedef struct dataset {
 } dataset;
 
 static dataset data[] = {
-    {.path =   "../data/TwoMoon", .views = 2, .clusters =   2, .lambda = 1.0, .normalize = false},
-    {.path = "../data/ThreeRing", .views = 2, .clusters =   3, .lambda = 1.0, .normalize = false},
-    {.path =       "../data/BBC", .views = 4, .clusters =   5, .lambda = 1.0, .normalize =  true},
-    {.path =    "../data/Hdigit", .views = 2, .clusters =  10, .lambda = 1.0, .normalize =  true},
-    {.path = "../data/100leaves", .views = 3, .clusters = 100, .lambda = 1.0, .normalize =  true},
+    {.path =    "../data/TwoMoon", .views = 2, .clusters =   2, .lambda = 1.0, .normalize = false},
+    {.path =  "../data/ThreeRing", .views = 2, .clusters =   3, .lambda = 1.0, .normalize = false},
+    {.path =        "../data/BBC", .views = 4, .clusters =   5, .lambda = 1.0, .normalize =  true},
+    {.path =     "../data/Hdigit", .views = 2, .clusters =  10, .lambda = 1.0, .normalize =  true},
+    {.path =  "../data/100leaves", .views = 3, .clusters = 100, .lambda = 1.0, .normalize =  true},
+    {.path = "../data/Nuswide20k", .views = 5, .clusters =  81, .lambda = 1.0, .normalize = false},
 };
 
 int main(int argc, char *argv[]) {
     // MPI Initialization
-    int rank;
-    MPI_Init(&argc, &argv);
+    int rank, thread_support;
+    MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &thread_support);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    if(thread_support != MPI_THREAD_MULTIPLE) {
+        printf("MPI concurrent messaging not supported. Exiting\n");
+        exit(1);
+    }
 
     // BLACS Initialization
     int context, blacs_rows = 2, blacs_cols = 2;

@@ -1,9 +1,5 @@
 #include "gmc_funs.h"
 
-inline int max(int a, int b) {
-    return b > a ? b : a;
-}
-
 matrix sqr_dist(matrix m) {
     // Compute sum of squared columns vector
     double * ssc = malloc(m.w * sizeof(double));
@@ -80,9 +76,8 @@ matrix update_u(matrix q) { // Height of q is m
 
 matrix update_f(matrix F, matrix U, double * ev, int c, int rank, int blacs_row, int blacs_col, int blacs_height, int blacs_width, int blacs_ctx,
                 MPI_Comm comm, elpa_t handle, int * counts, int * displs) {
-    int izero = 0, ione = 1, nb = BLOCK_SIZE, info;
-    double done = 1.0, dzero = 0.0;
-    arr_desc fd, flocald, eigvecd;
+    int izero = 0, nb = BLOCK_SIZE, info;
+    arr_desc fd, flocald;
 
     int n = F.w;
     MPI_Bcast(&n, 1, MPI_INT, 0, comm);
@@ -103,27 +98,24 @@ matrix update_f(matrix F, matrix U, double * ev, int c, int rank, int blacs_row,
     int mp = numroc_(&n, &nb, &blacs_row, &izero, &blacs_height);
     int nq = numroc_(&n, &nb, &blacs_col, &izero, &blacs_width);
     matrix f_local = new_matrix(mp, nq);
-    int lld = max(1, numroc_(&n, &n, &blacs_row, &izero, &blacs_height));
-    int lld_local = max(1, mp);
 
     // Distribute matrix by adding 0 to it
     // Original F has block size equal to total matrix size, since it's only on process 0
     // Distributed F is properly configured to be shared between processes
-    descinit_(&fd, &n, &n, &n, &n, &izero, &izero, &blacs_ctx, &lld, &info);
-    descinit_(&flocald, &n, &n, &nb, &nb, &izero, &izero, &blacs_ctx, &lld_local, &info);
-    pdgeadd_("N", &n, &n, &done, F.data, &ione, &ione, &fd, &dzero, f_local.data, &ione, &ione, &flocald);
+    descinit_(&fd, &n, &n, &n, &n, &izero, &izero, &blacs_ctx, &n, &info);
+    descinit_(&flocald, &n, &n, &nb, &nb, &izero, &izero, &blacs_ctx, &mp, &info);
+    gmc_distribute(n, n, F.data, f_local.data, blacs_row, blacs_col, blacs_width, blacs_height, nb, rank, comm);
 
     // Call eigensolver. Eigenvalues are given in ascending order. We are responsible for freeing the returned buffers.
     // We are using row major upper triangular, but since fortran uses column major, we indicate lower triangular,
     // which is equivalent in symmetric matrices
     double *eigenvectors, *eigenvalues; int error;
     //gmc_pdsyevx('L', n, f_local.data, flocald, 1, c + 1, 0.0, &eigenvalues, &eigenvectors, &eigvecd);
-    eigvecd = flocald;
     eigenvalues = malloc(n * sizeof(double)), eigenvectors = malloc(mp * nq * sizeof(double));
     elpa_eigenvectors(handle, f_local.data, eigenvalues, eigenvectors, &error);
 
     // Collect eigenvectors into process 0, set height to only work with c eigvecs, c+1 is only needed for eigval
-    pdgeadd_("N", &n, &n, &done, eigenvectors, &ione, &ione, &eigvecd, &dzero, F.data, &ione, &ione, &fd);
+    gmc_collect(n, n, eigenvectors, F.data, blacs_row, blacs_col, blacs_width, blacs_height, nb, rank, comm);
     F.h = c;
 
     if(!rank) memcpy(ev, eigenvalues, (c + 1) * sizeof(double));
