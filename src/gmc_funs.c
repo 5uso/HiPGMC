@@ -3,6 +3,7 @@
 matrix sqr_dist(matrix m) {
     // Compute sum of squared columns vector
     double * ssc = malloc(m.w * sizeof(double));
+    #pragma omp parallel for
     for(int i = 0; i < m.w; i++)
         ssc[i] = block_sum_col_sqr(m.data + i, m.h, m.w);
 
@@ -12,6 +13,7 @@ matrix sqr_dist(matrix m) {
 
     // Compute final matrix
     matrix d = new_matrix(m.w, m.w);
+    #pragma omp parallel for
     for(int i = 0; i < m.w; i++) {
         for(int j = 0; j < m.w; j++) {
             if(i == j) {

@@ -15,6 +15,7 @@ static int * displs;
 GMC_INTERNAL void __gmc_normalize(matrix * X, int m, int num) {
     for(int v = 0; v < m; v++) {
         int h = X[v].h, w = X[v].w;
+        #pragma omp parallel for
         for(int x = 0; x < w; x++) {
             double mean = 0.0;
             for(int y = 0; y < h; y++) mean += X[v].data[y * w + x];
@@ -46,6 +47,7 @@ GMC_INTERNAL void __gmc_init_s0(matrix * X, int m, int num, sparse_matrix * S0, 
         ed[v] = new_matrix(PN + 1, local_ted.h);
 
         int s = displs[rank] / num; // Start pattern for this process
+        #pragma omp parallel for
         for(int y = 0; y < pattern_cnts[rank]; y++) {
             local_ted.data[y * num + s + y] = INFINITY;
             
@@ -79,6 +81,7 @@ GMC_INTERNAL matrix __gmc_init_u(sparse_matrix * S0, int m, int num) {
     // U starts as average of SIG matrices
     memset(U.data, 0x00, num * pattern_cnts[rank] * sizeof(double));
 
+    #pragma omp parallel for
     for(int y = 0; y < pattern_cnts[rank]; y++) {
         double sum = 0.0;
         for(int i = 0; i < PN + 1; i++)
@@ -98,6 +101,7 @@ GMC_INTERNAL void __gmc_update_s0(sparse_matrix * S0, matrix U, matrix w, int m,
     for(int v = 0; v < m; v++) {
         double weight = w.data[v] * 2.0;
 
+        #pragma omp parallel for
         for(int y = 0; y < pattern_cnts[rank]; y++) {
             double max = ed[v].data[(PN + 1) * y];
             double maxU = U.data[y * num + S0[v].data[(PN + 1) * y].i];
@@ -133,6 +137,8 @@ GMC_INTERNAL void __gmc_update_w(sparse_matrix * S0, matrix U, matrix w, int m, 
 
     for(int v = 0; v < m; v++) {
         memcpy(US.data, U.data, num * pattern_cnts[rank] * sizeof(double));
+        
+        #pragma omp parallel for
         for(int y = 0; y < pattern_cnts[rank]; y++)
             for(int i = 0; i < PN + 1; i++) {
                 sprs_val val = S0[v].data[y * (PN + 1) + i];
@@ -160,10 +166,11 @@ GMC_INTERNAL void __gmc_update_u(sparse_matrix * S0, matrix U, matrix w, matrix 
     MPI_Scatterv(dist.data, counts, displs, MPI_DOUBLE, local_dist.data, counts[rank], MPI_DOUBLE, 0, comm);
     if(!rank) free_matrix(dist);
 
-    int * idx = malloc(num * sizeof(int));
 
+    #pragma omp parallel for
     for(int y = 0; y < pattern_cnts[rank]; y++) {
         int qw = 0;
+        int * idx = malloc(num * sizeof(int));
 
         #ifdef IS_LOCAL
             memset(idx, 0x00, num * sizeof(int));
@@ -211,9 +218,9 @@ GMC_INTERNAL void __gmc_update_u(sparse_matrix * S0, matrix U, matrix w, matrix 
         }
 
         free_matrix(q);
+        free(idx);
     }
 
-    free(idx);
     free_matrix(local_dist);
 }
 
@@ -417,6 +424,7 @@ gmc_result gmc(matrix * X, int m, int c, double lambda, bool normalize, MPI_Comm
     // Adjacency matrix
     GMC_STEP(printf("End, symU\n"));
     bool * adj = malloc(num * num * sizeof(bool));
+    #pragma omp parallel for
     for(int j = 0; j < num; j++)
         for(int x = 0; x < j; x++)
             adj[j * num + x] = (U.data[j * num + x] != 0.0) || (U.data[x * num + j] != 0.0);

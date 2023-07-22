@@ -12,6 +12,7 @@
 #include <string.h>
 #include <math.h>
 #include <mpi.h>
+#include <omp.h>
 
 typedef struct gmc_result {
     matrix U;

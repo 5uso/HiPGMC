@@ -12,6 +12,7 @@
 #include <cblas.h>
 #include <math.h>
 #include <mpi.h>
+#include <omp.h>
 
 #define EPS 2.2204460492503131e-16
 #define BLOCK_SIZE 64
