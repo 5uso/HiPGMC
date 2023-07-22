@@ -10,8 +10,6 @@ int gmc_pdsyevx(char uplo, int n, double * a, arr_desc desca, int il, int iu, do
     Cblacs_gridinfo(ctx, &blacs_height, &blacs_width, &blacs_row, &blacs_col);
 
     // Call variables
-    char jobz = 'V', range = 'I';
-
     int izero = 0, ione = 1;
     double dzero = 0.0;
 
@@ -35,7 +33,7 @@ int gmc_pdsyevx(char uplo, int n, double * a, arr_desc desca, int il, int iu, do
     *w = malloc(zn * sizeof(double));
 
     // Call to query workspace
-    pdsyevx_(&jobz, &range, &uplo, &n, a, &ione, &ione, &desca, &dzero, &dzero, &il, &iu, &abstol, &m, &nz, *w, &dzero, *z, &ione, &ione, descz, work, &lwork, iwork, &liwork, ifail, icluster, gap, &info);
+    pdsyevx_("V", "I", &uplo, &n, a, &ione, &ione, &desca, &dzero, &dzero, &il, &iu, &abstol, &m, &nz, *w, &dzero, *z, &ione, &ione, descz, work, &lwork, iwork, &liwork, ifail, icluster, gap, &info);
     if(info) return info;
     
     // Prepare workspace
@@ -49,7 +47,7 @@ int gmc_pdsyevx(char uplo, int n, double * a, arr_desc desca, int il, int iu, do
     iwork = realloc(iwork, liwork * sizeof(int));
 
     // Finally, do the thing
-    pdsyevx_(&jobz, &range, &uplo, &n, a, &ione, &ione, &desca, &dzero, &dzero, &il, &iu, &abstol, &m, &nz, *w, &dzero, *z, &ione, &ione, descz, work, &lwork, iwork, &liwork, ifail, icluster, gap, &info);
+    pdsyevx_("V", "I", &uplo, &n, a, &ione, &ione, &desca, &dzero, &dzero, &il, &iu, &abstol, &m, &nz, *w, &dzero, *z, &ione, &ione, descz, work, &lwork, iwork, &liwork, ifail, icluster, gap, &info);
 
     // Cleanup
     free(ifail);
