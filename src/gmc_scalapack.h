@@ -2,6 +2,7 @@
 #define GMCSCALAPACK
 
 #include <stdlib.h>
+#include <limits.h>
 #include <math.h>
 #include <omp.h>
 #include <mpi.h>

@@ -59,9 +59,33 @@ int gmc_pdsyevx(char uplo, int n, double * a, arr_desc desca, int il, int iu, do
     return info;
 }
 
+MPI_Datatype gmc_contiguous_long(MPI_Datatype type, long long count) {
+    MPI_Datatype result;
+
+    long long blocks = count / INT_MAX + 1;
+    long long remainder = count % INT_MAX;
+
+    MPI_Count element_size;
+    MPI_Type_size_x(type, &element_size);
+    
+    int lengths[blocks]; MPI_Aint displs[blocks], d = 0; MPI_Datatype types[blocks];
+    for(int i = 0; i < blocks; i++) {
+        lengths[i] = INT_MAX;
+        displs[i] = d;
+        types[i] = type;
+        d += INT_MAX * element_size;
+    }
+    lengths[blocks - 1] = remainder;
+
+    // Construct a datatype with repetitions of the original type
+    MPI_Type_create_struct(blocks, lengths, displs, types, &result);
+
+    return result;
+}
+
 void gmc_distribute(int w, int h, double * a, double * b, int blacs_row, int blacs_col, int blacs_width, int blacs_height, int nb, int rank, MPI_Comm comm) {
     // Configure 2D block-cyclic distribution
-    int numprocs = blacs_width * blacs_height, pos = 0, izero = 0;
+    int numprocs = blacs_width * blacs_height, izero = 0;
     int global_dims[] = { w, h };
     int distr_modes[] = { MPI_DISTRIBUTE_CYCLIC, MPI_DISTRIBUTE_CYCLIC };
     int distr_block[] = { nb, nb };
@@ -73,35 +97,30 @@ void gmc_distribute(int w, int h, double * a, double * b, int blacs_row, int bla
 
     if(!rank) {
         #pragma omp parallel for
-        for(int r = 0; r < numprocs; r++) {
-            MPI_Datatype distr_arr;
-            if(!r) {
-                // Pack distribution for root process
-                MPI_Type_create_darray(numprocs, 0, 2, global_dims, distr_modes, distr_block, procgr_dims, MPI_ORDER_C, MPI_DOUBLE, &distr_arr);
-                MPI_Type_commit(&distr_arr);
-                MPI_Pack(a, 1, distr_arr, b, mp * nq * sizeof(double), &pos, comm);
-                MPI_Type_free(&distr_arr);
-                continue;
-            }
-
-            // Send corresponding data to another process
+        for(int r = numprocs - 1; r >= 0; r--) {
+            MPI_Datatype distr_arr; MPI_Request req;
             MPI_Type_create_darray(numprocs, r, 2, global_dims, distr_modes, distr_block, procgr_dims, MPI_ORDER_C, MPI_DOUBLE, &distr_arr);
             MPI_Type_commit(&distr_arr);
-            MPI_Send(a, 1, distr_arr, r, 2711, comm);
+
+            // Send corresponding data to process
+            if(!r) MPI_Isend(a, 1, distr_arr, r, 2711, comm, &req);
+            else MPI_Send(a, 1, distr_arr, r, 2711, comm);
+
             MPI_Type_free(&distr_arr);
         }
-
-        return;
     }
 
     // Receive from root process as contiguous array
     MPI_Status stat;
-    MPI_Recv(b, mp * nq, MPI_DOUBLE, 0, 2711, comm, &stat);
+    MPI_Datatype cont = gmc_contiguous_long(MPI_DOUBLE, mp * (long long) nq);
+    MPI_Type_commit(&cont);
+    MPI_Recv(b, 1, cont, 0, 2711, comm, &stat);
+    MPI_Type_free(&cont);
 }
 
 void gmc_collect(int w, int h, double * a, double * b, int blacs_row, int blacs_col, int blacs_width, int blacs_height, int nb, int rank, MPI_Comm comm) {
     // Configure 2D block-cyclic distribution
-    int numprocs = blacs_width * blacs_height, pos = 0, izero = 0;
+    int numprocs = blacs_width * blacs_height, izero = 0;
     int global_dims[] = { w, h };
     int distr_modes[] = { MPI_DISTRIBUTE_CYCLIC, MPI_DISTRIBUTE_CYCLIC };
     int distr_block[] = { nb, nb };
@@ -111,30 +130,29 @@ void gmc_collect(int w, int h, double * a, double * b, int blacs_row, int blacs_
     int mp = numroc_(&h, &nb, &blacs_row, &izero, &blacs_height);
     int nq = numroc_(&w, &nb, &blacs_col, &izero, &blacs_width);
 
+    // Create type to support potentially huge buffers
+    MPI_Datatype cont = gmc_contiguous_long(MPI_DOUBLE, mp * (long long) nq);
+    MPI_Type_commit(&cont);
+
     if(!rank) {
+        MPI_Request req;
+        MPI_Isend(a, 1, cont, 0, 2712, comm, &req);
+
         #pragma omp parallel for
         for(int r = 0; r < numprocs; r++) {
             MPI_Datatype distr_arr;
-            if(!r) {
-                // Unpack root process elements back into global matrix
-                MPI_Type_create_darray(numprocs, 0, 2, global_dims, distr_modes, distr_block, procgr_dims, MPI_ORDER_C, MPI_DOUBLE, &distr_arr);
-                MPI_Type_commit(&distr_arr);
-                MPI_Unpack(a, mp * nq * sizeof(double), &pos, b, 1, distr_arr, comm);
-                MPI_Type_free(&distr_arr);
-                continue;
-            }
-
-            // Receive from each process and place into the global matrix
             MPI_Type_create_darray(numprocs, r, 2, global_dims, distr_modes, distr_block, procgr_dims, MPI_ORDER_C, MPI_DOUBLE, &distr_arr);
             MPI_Type_commit(&distr_arr);
+
+            // Receive from each process and place into the global matrix
             MPI_Status stat;
             MPI_Recv(b, 1, distr_arr, r, 2712, comm, &stat);
-            MPI_Type_free(&distr_arr);
         }
 
         return;
     }
 
     // Send data to root process as contiguous array
-    MPI_Send(a, mp * nq, MPI_DOUBLE, 0, 2712, comm);
+    MPI_Send(a, 1, cont, 0, 2712, comm);
+    MPI_Type_free(&cont);
 }
