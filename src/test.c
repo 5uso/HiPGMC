@@ -1,18 +1,11 @@
 #include "gmc_scalapack.h"
+#include "gmc_testing.h"
 #include "gmc_io.h"
 #include "gmc.h"
 
 #include <sys/time.h>
 #include <stdio.h>
 #include <mpi.h>
-
-typedef struct dataset {
-    const char * path;
-    int views;
-    int clusters;
-    double lambda;
-    bool normalize;
-} dataset;
 
 static dataset data[] = {
     {.path =    "../data/TwoMoon", .views = 2, .clusters =   2, .lambda = 1.0, .normalize = false},
