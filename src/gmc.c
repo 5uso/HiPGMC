@@ -302,38 +302,40 @@ gmc_result gmc(matrix * X, int m, int c, double lambda, bool normalize, MPI_Comm
     m = params.m, c = params.c, lambda = params.l, normalize = params.norm;
     int num = params.n, nb = BLOCK_SIZE, izero = 0;
 
-    // Set up ELPA
-    int error;
-    if (elpa_init(ELPA_API_VER) != ELPA_OK) {
-        fprintf(stderr, "{ %d, %d } Error: ELPA API version not supported\n", blacs_row, blacs_col);
-        exit(1);
-    }
+    #ifdef ELPA_API_VER
+        // Set up ELPA
+        int error;
+        if (elpa_init(ELPA_API_VER) != ELPA_OK) {
+            fprintf(stderr, "{ %d, %d } Error: ELPA API version not supported\n", blacs_row, blacs_col);
+            exit(1);
+        }
 
-    handle = elpa_allocate(&error);
-    elpa_set(handle, "na", num, &error);
-    elpa_set(handle, "nev", c + 1, &error);
-    elpa_set(handle, "nblk", nb, &error);
-    elpa_set(handle, "mpi_comm_parent", MPI_Comm_c2f(comm), &error);
-    elpa_set(handle, "process_row", blacs_row, &error);
-    elpa_set(handle, "process_col", blacs_col, &error);
-    elpa_set(handle, "blacs_context", blacs_ctx, &error);
+        handle = elpa_allocate(&error);
+        elpa_set(handle, "na", num, &error);
+        elpa_set(handle, "nev", c + 1, &error);
+        elpa_set(handle, "nblk", nb, &error);
+        elpa_set(handle, "mpi_comm_parent", MPI_Comm_c2f(comm), &error);
+        elpa_set(handle, "process_row", blacs_row, &error);
+        elpa_set(handle, "process_col", blacs_col, &error);
+        elpa_set(handle, "blacs_context", blacs_ctx, &error);
 
-    int mp = numroc_(&num, &nb, &blacs_row, &izero, &blacs_height);
-    int nq = numroc_(&num, &nb, &blacs_col, &izero, &blacs_width);
-    elpa_set(handle, "local_nrows", mp, &error);
-    elpa_set(handle, "local_ncols", nq, &error);
+        int mp = numroc_(&num, &nb, &blacs_row, &izero, &blacs_height);
+        int nq = numroc_(&num, &nb, &blacs_col, &izero, &blacs_width);
+        elpa_set(handle, "local_nrows", mp, &error);
+        elpa_set(handle, "local_ncols", nq, &error);
 
-    error = elpa_setup(handle);
+        error = elpa_setup(handle);
 
-    elpa_set(handle, "nvidia-gpu", 1, &error);
-    if(error == ELPA_OK) {
-        elpa_set(handle, "solver", ELPA_SOLVER_2STAGE, &error);
-        if(!rank && error != ELPA_OK) printf("can't set 2stage\n");
-        elpa_set(handle, "real_kernel", ELPA_2STAGE_REAL_NVIDIA_GPU, &error);
-        if(!rank && error != ELPA_OK) printf("can't set gpu kernel\n");
-    } else if(!rank) {
-        fprintf(stderr, "Warning: ELPA GPU acceleration not supported\n");
-    }
+        elpa_set(handle, "nvidia-gpu", 1, &error);
+        if(error == ELPA_OK) {
+            elpa_set(handle, "solver", ELPA_SOLVER_2STAGE, &error);
+            if(!rank && error != ELPA_OK) printf("can't set 2stage\n");
+            elpa_set(handle, "real_kernel", ELPA_2STAGE_REAL_NVIDIA_GPU, &error);
+            if(!rank && error != ELPA_OK) printf("can't set gpu kernel\n");
+        } else if(!rank) {
+            fprintf(stderr, "Warning: ELPA GPU acceleration not supported\n");
+        }
+    #endif
 
     if(!rank) {
         // Normalize data
@@ -411,9 +413,11 @@ gmc_result gmc(matrix * X, int m, int c, double lambda, bool normalize, MPI_Comm
     // Cleanup, with workers
     for(int i = 0; i < m; i++) free_matrix(ed[i]);
     free(sums); free(ed); free_matrix(w);
-    elpa_deallocate(handle, &error);
-    elpa_uninit(&error);
     free(displs); free(counts); free(pattern_cnts);
+    #ifdef ELPA_API_VER
+        elpa_deallocate(handle, &error);
+        elpa_uninit(&error);
+    #endif
 
     // Workers return before final clustering
     if(rank) {

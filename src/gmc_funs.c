@@ -111,10 +111,15 @@ matrix update_f(matrix F, matrix U, double * ev, int c, int rank, int blacs_row,
     // Call eigensolver. Eigenvalues are given in ascending order. We are responsible for freeing the returned buffers.
     // We are using row major upper triangular, but since fortran uses column major, we indicate lower triangular,
     // which is equivalent in symmetric matrices
-    double *eigenvectors, *eigenvalues; int error;
-    //gmc_pdsyevx('L', n, f_local.data, flocald, 1, c + 1, 0.0, &eigenvalues, &eigenvectors, &eigvecd);
-    eigenvalues = malloc(n * sizeof(double)), eigenvectors = malloc(mp * nq * sizeof(double));
-    elpa_eigenvectors(handle, f_local.data, eigenvalues, eigenvectors, &error);
+    double *eigenvectors, *eigenvalues;
+    #ifdef ELPA_API_VER
+        int error;
+        eigenvalues = malloc(n * sizeof(double)), eigenvectors = malloc(mp * nq * sizeof(double));
+        elpa_eigenvectors(handle, f_local.data, eigenvalues, eigenvectors, &error);
+    #else
+        arr_desc eigvecd;
+        gmc_pdsyevx('L', n, f_local.data, flocald, 1, c + 1, 0.0, &eigenvalues, &eigenvectors, &eigvecd);
+    #endif
 
     // Collect eigenvectors into process 0, set height to only work with c eigvecs, c+1 is only needed for eigval
     gmc_collect(n, n, eigenvectors, F.data, blacs_row, blacs_col, blacs_width, blacs_height, nb, rank, comm);
