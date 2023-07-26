@@ -1,15 +1,50 @@
 #include "gmc_funs.h"
 
-matrix sqr_dist(matrix m) {
+matrix sqr_dist(matrix m, int rank, int blacs_row, int blacs_col, int blacs_height, int blacs_width, int blacs_ctx, MPI_Comm comm) {
     // Compute sum of squared columns vector
-    double * ssc = malloc(m.w * sizeof(double));
-    #pragma omp parallel for
-    for(int i = 0; i < m.w; i++)
-        ssc[i] = block_sum_col_sqr(m.data + i, m.h, m.w);
+    double * ssc;
+    if(!rank) {
+        ssc = malloc(m.w * sizeof(double));
+        #pragma omp parallel for
+        for(int i = 0; i < m.w; i++)
+            ssc[i] = block_sum_col_sqr(m.data + i, m.h, m.w);
+    }
 
-    // Compute multiplication by transpose (upper triangular only)
-    matrix mt = new_matrix(m.w, m.w);
-    cblas_dsyrk(CblasRowMajor, CblasUpper, CblasTrans, m.w, m.h, 1.0, m.data, m.w, 0.0, mt.data, m.w);
+    // Sequential section, faster on some setups
+    #ifdef SEQ_SQR
+        if(rank) return m;
+        matrix mt = new_matrix(m.w, m.w);
+        cblas_dsyrk(CblasRowMajor, CblasUpper, CblasTrans, m.w, m.h, 1.0, m.data, m.w, 0.0, mt.data, m.w);
+    #else
+        // Distribute m
+        MPI_Bcast(&m, sizeof(matrix), MPI_BYTE, 0, comm);
+        int nb = BLOCK_SIZE, izero = 0, ione = 1, info;
+        int mp = numroc_(&m.w, &nb, &blacs_row, &izero, &blacs_height);
+        int nq = numroc_(&m.h, &nb, &blacs_col, &izero, &blacs_width);
+        matrix m_local = new_matrix(mp, nq);
+        gmc_distribute(m.w, m.h, m.data, m_local.data, blacs_row, blacs_col, blacs_width, blacs_height, nb, rank, comm);
+        
+        arr_desc mlocald, mtlocald;
+        int lld_local = mp > 1 ? mp : 1;
+        descinit_(&mlocald, &m.w, &m.h, &nb, &nb, &izero, &izero, &blacs_ctx, &lld_local, &info);
+        nq = numroc_(&m.w, &nb, &blacs_col, &izero, &blacs_width);
+        descinit_(&mtlocald, &m.w, &m.w, &nb, &nb, &izero, &izero, &blacs_ctx, &lld_local, &info);
+        
+        // Compute multiplication by transpose (upper triangular only)
+        matrix mt_local = new_matrix(mp, nq);
+        double done = 1.0, dzero = 0.0;
+        pdsyrk_("L", "N", &m.w, &m.h, &done, m_local.data, &ione, &ione, &mlocald, &dzero, mt_local.data, &ione, &ione, &mtlocald);
+        free_matrix(m_local);
+
+        // Collect mt
+        matrix mt;
+        if(!rank) mt = new_matrix(m.w, m.w);
+        gmc_collect(m.w, m.w, mt_local.data, mt.data, blacs_row, blacs_col, blacs_width, blacs_height, nb, rank, comm);
+        free_matrix(mt_local);
+
+        // Workers can return here
+        if(rank) return mt;
+    #endif
 
     // Compute final matrix
     matrix d = new_matrix(m.w, m.w);
@@ -104,8 +139,9 @@ matrix update_f(matrix F, matrix U, double * ev, int c, int rank, int blacs_row,
     // Distribute matrix by adding 0 to it
     // Original F has block size equal to total matrix size, since it's only on process 0
     // Distributed F is properly configured to be shared between processes
+    int lld_local = mp > 1 ? mp : 1;
     descinit_(&fd, &n, &n, &n, &n, &izero, &izero, &blacs_ctx, &n, &info);
-    descinit_(&flocald, &n, &n, &nb, &nb, &izero, &izero, &blacs_ctx, &mp, &info);
+    descinit_(&flocald, &n, &n, &nb, &nb, &izero, &izero, &blacs_ctx, &lld_local, &info);
     gmc_distribute(n, n, F.data, f_local.data, blacs_row, blacs_col, blacs_width, blacs_height, nb, rank, comm);
 
     // Call eigensolver. Eigenvalues are given in ascending order. We are responsible for freeing the returned buffers.

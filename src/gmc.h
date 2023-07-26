@@ -35,7 +35,10 @@ void free_gmc_result(gmc_result r);
 #define PN 15
 #define IS_LOCAL
 #define INLINE_GMC_INTERNALS
-//#define PRINT_GMC_STEPS
+#define PRINT_GMC_STEPS
+
+// Run frobenius norm on a single node, which may be faster on some systems
+//#define SEQ_NORM
 
 #ifdef INLINE_GMC_INTERNALS
     #define GMC_INTERNAL static inline
@@ -44,9 +47,18 @@ void free_gmc_result(gmc_result r);
 #endif
 
 #ifdef PRINT_GMC_STEPS
-    #define GMC_STEP(x) if(!rank) (x)
+    #define GET_MACRO(_A, _B, MACRO, ...) MACRO
+    #define GMC_STEP(...) GET_MACRO(__VA_ARGS__, GMC_STEP_ITER, GMC_STEP_INIT)(__VA_ARGS__)
+    #define GMC_STEP_INIT(x) if(!rank) { \
+        gettimeofday(&curr, 0); \
+        printf("%s %.4f\n", x, curr.tv_sec - begin.tv_sec + (curr.tv_usec - begin.tv_usec) * 1e-6); \
+    }
+    #define GMC_STEP_ITER(x, i) if(!rank) { \
+        gettimeofday(&curr, 0); \
+        printf("Iteration %d: %s %.4f\n", i, x, curr.tv_sec - begin.tv_sec + (curr.tv_usec - begin.tv_usec) * 1e-6); \
+    }
 #else
-    #define GMC_STEP(x)
+    #define GMC_STEP(...)
 #endif
 
 #endif

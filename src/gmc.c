@@ -12,6 +12,11 @@ static int * pattern_cnts;
 static int * counts;
 static int * displs;
 
+#ifdef PRINT_GMC_STEPS
+    #include <sys/time.h>
+    struct timeval begin, curr;
+#endif
+
 GMC_INTERNAL void __gmc_normalize(matrix * X, int m, int num) {
     for(int v = 0; v < m; v++) {
         int h = X[v].h, w = X[v].w;
@@ -38,7 +43,7 @@ GMC_INTERNAL void __gmc_normalize(matrix * X, int m, int num) {
 GMC_INTERNAL void __gmc_init_s0(matrix * X, int m, int num, sparse_matrix * S0, matrix * ed, double * sums) {
     for(int v = 0; v < m; v++) {
         matrix ted; // Rank 0 computes square distance matrix and scatters
-        if(!rank) ted = sqr_dist(X[v]);
+        ted = sqr_dist(rank ? ted : X[v], rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm);
         matrix local_ted = new_matrix(num, pattern_cnts[rank]);
         MPI_Scatterv(ted.data, counts, displs, MPI_DOUBLE, local_ted.data, counts[rank], MPI_DOUBLE, 0, comm);
         if(!rank) free_matrix(ted);
@@ -132,8 +137,9 @@ GMC_INTERNAL void __gmc_update_w(sparse_matrix * S0, matrix U, matrix w, int m, 
     arr_desc desca_local; int nb = BLOCK_SIZE, izero = 0, ione = 1, info;
     int mp = numroc_(&num, &nb, &blacs_row, &izero, &blacs_height);
     int nq = numroc_(&num, &nb, &blacs_col, &izero, &blacs_width);
+    int lld_local = mp > 1 ? mp : 1;
     matrix US_local = new_matrix(mp, nq);
-    descinit_(&desca_local, &num, &num, &nb, &nb, &izero, &izero, &blacs_ctx, &mp, &info);
+    descinit_(&desca_local, &num, &num, &nb, &nb, &izero, &izero, &blacs_ctx, &lld_local, &info);
 
     for(int v = 0; v < m; v++) {
         memcpy(US.data, U.data, num * pattern_cnts[rank] * sizeof(double));
@@ -148,10 +154,18 @@ GMC_INTERNAL void __gmc_update_w(sparse_matrix * S0, matrix U, matrix w, int m, 
 
         // Redistribute matrix from row to block cyclic
         MPI_Gatherv(US.data, counts[rank], MPI_DOUBLE, US_global.data, counts, displs, MPI_DOUBLE, 0, comm);
-        gmc_distribute(num, num, US_global.data, US_local.data, blacs_row, blacs_col, blacs_width, blacs_height, nb, rank, comm);
 
-        // Compute frobenius norm in parallel
-        double distUS = pdlange_("F", &num, &num, US_local.data, &ione, &ione, &desca_local, NULL);
+        #ifdef SEQ_NORM
+            double distUS;
+            if(!rank) distUS = LAPACKE_dlange(LAPACK_COL_MAJOR, 'F', num, num, US_global.data, num);
+            MPI_Bcast(&distUS, 1, MPI_DOUBLE, 0, comm);
+        #else
+            gmc_distribute(num, num, US_global.data, US_local.data, blacs_row, blacs_col, blacs_width, blacs_height, nb, rank, comm);
+
+            // Compute frobenius norm in parallel
+            double distUS = pdlange_("F", &num, &num, US_local.data, &ione, &ione, &desca_local, NULL);
+        #endif
+
         w.data[v] = 0.5 / (distUS + EPS);
     }
 
@@ -161,7 +175,7 @@ GMC_INTERNAL void __gmc_update_w(sparse_matrix * S0, matrix U, matrix w, int m, 
 
 GMC_INTERNAL void __gmc_update_u(sparse_matrix * S0, matrix U, matrix w, matrix * F, int m, int num, double * lambda) {
     matrix dist; // Rank 0 computes square distance matrix and scatters
-    if(!rank) dist = sqr_dist(*F); // F is transposed, since LAPACK returns it in column major
+    dist = sqr_dist(*F, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm); // F is transposed, since LAPACK returns it in column major
     matrix local_dist = new_matrix(num, pattern_cnts[rank]);
     MPI_Scatterv(dist.data, counts, displs, MPI_DOUBLE, local_dist.data, counts[rank], MPI_DOUBLE, 0, comm);
     if(!rank) free_matrix(dist);
@@ -230,19 +244,19 @@ GMC_INTERNAL bool __gmc_main_loop(int it, sparse_matrix * S0, matrix U, matrix w
     double * ev = NULL;
 
     // Update S0
-    GMC_STEP(printf("Iteration %d, update S0\n", it));
+    GMC_STEP("update S0", it);
     __gmc_update_s0(S0, U, w, m, num, ed, sums);
 
     // Update w
-    GMC_STEP(printf("Iteration %d, update w\n", it));
+    GMC_STEP("update w", it);
     __gmc_update_w(S0, U, w, m, num);
 
     // Update U
-    GMC_STEP(printf("Iteration %d, update U\n", it));
+    GMC_STEP("update U", it);
     __gmc_update_u(S0, U, w, F, m, num, lambda);
 
     // Update matrix of eigenvectors (F), as well as eigenvalues
-    GMC_STEP(printf("Iteration %d, update F\n", it));
+    GMC_STEP("update F", it);
     matrix temp = *F_old;
     *F_old = *F;
     *F = temp;
@@ -250,7 +264,7 @@ GMC_INTERNAL bool __gmc_main_loop(int it, sparse_matrix * S0, matrix U, matrix w
     *F = update_f(*F, U, ev, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm, handle, counts, displs);
 
     // Update lambda
-    GMC_STEP(printf("Iteration %d, update lambda\n", it));
+    GMC_STEP("update lambda", it);
     if(!rank) {
         double fn = block_sum(ev, c);
         if(fn > ZR) {
@@ -277,6 +291,10 @@ GMC_INTERNAL bool __gmc_main_loop(int it, sparse_matrix * S0, matrix U, matrix w
 }
 
 gmc_result gmc(matrix * X, int m, int c, double lambda, bool normalize, MPI_Comm in_comm, int in_context) {
+    #ifdef PRINT_GMC_STEPS
+        gettimeofday(&begin, 0);
+    #endif
+
     sparse_matrix *S0 = NULL; double *sums = NULL;   
     matrix *ed = NULL, U, F, F_old, evs, w;
 
@@ -339,7 +357,7 @@ gmc_result gmc(matrix * X, int m, int c, double lambda, bool normalize, MPI_Comm
 
     if(!rank) {
         // Normalize data
-        GMC_STEP(printf("Init, normalize\n"));
+        GMC_STEP("Init: normalize");
         if(normalize) __gmc_normalize(X, m, num);
     }
 
@@ -356,18 +374,18 @@ gmc_result gmc(matrix * X, int m, int c, double lambda, bool normalize, MPI_Comm
     }
 
     // Initialize SIG matrices
-    GMC_STEP(printf("Init, SIG matrices\n"));
+    GMC_STEP("Init: SIG matrices");
     S0 = malloc(m * sizeof(sparse_matrix));
     ed = malloc(m * sizeof(matrix));
     sums = malloc(m * pattern_cnts[rank] * sizeof(double));
     __gmc_init_s0(X, m, num, S0, ed, sums);
 
     // U starts as average of SIG matrices
-    GMC_STEP(printf("Init, U\n"));
+    GMC_STEP("Init: U");
     U = __gmc_init_u(S0, m, num);
 
     // Get matrix of eigenvectors (F), as well as eigenvalues
-    GMC_STEP(printf("Init, F\n"));
+    GMC_STEP("Init: F");
     if(!rank) {
         F = new_matrix(num, num);
         F_old = new_matrix(num, num);
@@ -377,7 +395,7 @@ gmc_result gmc(matrix * X, int m, int c, double lambda, bool normalize, MPI_Comm
     F = update_f(F, U, evs.data, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm, handle, counts, displs);
 
     // Initialize w to m uniform (All views start with the same weight)
-    GMC_STEP(printf("Init, w\n"));
+    GMC_STEP("Init: w");
     double wI = 1.0 / m;
     w = new_matrix(m, 1);
     for(int v = 0; v < m; v++) w.data[v] = wI;
@@ -426,7 +444,7 @@ gmc_result gmc(matrix * X, int m, int c, double lambda, bool normalize, MPI_Comm
     }
 
     // Adjacency matrix
-    GMC_STEP(printf("End, symU\n"));
+    GMC_STEP("End: symU");
     bool * adj = malloc(num * num * sizeof(bool));
     #pragma omp parallel for
     for(int j = 0; j < num; j++)
@@ -434,12 +452,12 @@ gmc_result gmc(matrix * X, int m, int c, double lambda, bool normalize, MPI_Comm
             adj[j * num + x] = (U.data[j * num + x] != 0.0) || (U.data[x * num + j] != 0.0);
 
     // Final clustering. Find connected components on sU with Tarjan's algorithm
-    GMC_STEP(printf("End, final clustering\n"));
+    GMC_STEP("End: final clustering");
     int * y = malloc(num * sizeof(int));
     int cluster_num = connected_comp(adj, y, num);
 
     // Cleanup
-    GMC_STEP(printf("End, cleanup\n"));
+    GMC_STEP("End: cleanup");
     free_matrix(F_old); free(adj);
 
     // Build output struct

@@ -1,6 +1,6 @@
 #include "gmc_scalapack.h"
 
-static inline int max(int a, int b) {
+static inline int _max(int a, int b) {
     return b > a ? b : a;
 }
 
@@ -20,7 +20,7 @@ int gmc_pdsyevx(char uplo, int n, double * a, arr_desc desca, int il, int iu, do
     int z_mp = numroc_(&zm, &nb, &blacs_row, &izero, &blacs_height);
     int z_nq = numroc_(&zn, &nb, &blacs_col, &izero, &blacs_width);
     *z = malloc(z_mp * z_nq * sizeof(double));
-    int z_lld_distr = max(1, z_mp);
+    int z_lld_distr = _max(1, z_mp);
     descinit_(descz, &zm, &zn, &nb, &nb, &izero, &izero, &ctx, &z_lld_distr, &info);
 
     // Other buffers
@@ -37,12 +37,12 @@ int gmc_pdsyevx(char uplo, int n, double * a, arr_desc desca, int il, int iu, do
     if(info) return info;
     
     // Prepare workspace
-    int nn = max(max(n, nb), 2);
+    int nn = _max(_max(n, nb), 2);
     int np = numroc_(&nn, &nb, &izero, &izero, &blacs_height);
     int mq = numroc_(&nn, &nb, &izero, &izero, &blacs_width);
-    int nnp = max(max(n, 4), blacs_height * blacs_width + 1);
-    lwork = max((int) fabs(work[0]), 5 * n + max(5 * nn, np * mq + 2 * nb * nb) + ((n - 1) / (blacs_height * blacs_width) + 1) * nn);
-    liwork = max(iwork[0], 6 * nnp);
+    int nnp = _max(_max(n, 4), blacs_height * blacs_width + 1);
+    lwork = _max((int) fabs(work[0]), 5 * n + _max(5 * nn, np * mq + 2 * nb * nb) + ((n - 1) / (blacs_height * blacs_width) + 1) * nn);
+    liwork = _max(iwork[0], 6 * nnp);
     work = realloc(work, lwork * sizeof(double));
     iwork = realloc(iwork, liwork * sizeof(int));
 
@@ -86,14 +86,14 @@ MPI_Datatype gmc_contiguous_long(MPI_Datatype type, long long count) {
 void gmc_distribute(int w, int h, double * a, double * b, int blacs_row, int blacs_col, int blacs_width, int blacs_height, int nb, int rank, MPI_Comm comm) {
     // Configure 2D block-cyclic distribution
     int numprocs = blacs_width * blacs_height, izero = 0;
-    int global_dims[] = { w, h };
+    int global_dims[] = { h, w };
     int distr_modes[] = { MPI_DISTRIBUTE_CYCLIC, MPI_DISTRIBUTE_CYCLIC };
     int distr_block[] = { nb, nb };
     int procgr_dims[] = { blacs_width, blacs_height };
 
     // Dimensions of local matrix
-    int mp = numroc_(&h, &nb, &blacs_row, &izero, &blacs_height);
-    int nq = numroc_(&w, &nb, &blacs_col, &izero, &blacs_width);
+    int mp = numroc_(&w, &nb, &blacs_row, &izero, &blacs_height);
+    int nq = numroc_(&h, &nb, &blacs_col, &izero, &blacs_width);
 
     if(!rank) {
         #pragma omp parallel for
@@ -121,14 +121,14 @@ void gmc_distribute(int w, int h, double * a, double * b, int blacs_row, int bla
 void gmc_collect(int w, int h, double * a, double * b, int blacs_row, int blacs_col, int blacs_width, int blacs_height, int nb, int rank, MPI_Comm comm) {
     // Configure 2D block-cyclic distribution
     int numprocs = blacs_width * blacs_height, izero = 0;
-    int global_dims[] = { w, h };
+    int global_dims[] = { h, w };
     int distr_modes[] = { MPI_DISTRIBUTE_CYCLIC, MPI_DISTRIBUTE_CYCLIC };
     int distr_block[] = { nb, nb };
     int procgr_dims[] = { blacs_width, blacs_height };
 
     // Dimensions of local matrix
-    int mp = numroc_(&h, &nb, &blacs_row, &izero, &blacs_height);
-    int nq = numroc_(&w, &nb, &blacs_col, &izero, &blacs_width);
+    int mp = numroc_(&w, &nb, &blacs_row, &izero, &blacs_height);
+    int nq = numroc_(&h, &nb, &blacs_col, &izero, &blacs_width);
 
     // Create type to support potentially huge buffers
     MPI_Datatype cont = gmc_contiguous_long(MPI_DOUBLE, mp * (long long) nq);

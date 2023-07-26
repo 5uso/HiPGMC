@@ -4,6 +4,7 @@ static inline double rand_d(double min, double max) {
     return min + (rand() / (RAND_MAX / (max - min)));
 }
 
+// Generate random data matrix that results in a cyclic clustering
 matrix * generate_data(int samples, int views, int features, int clusters, double difficulty) {
     srand(0);
     matrix * r = malloc(views * sizeof(matrix));

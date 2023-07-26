@@ -26,6 +26,7 @@ extern void descinit_(arr_desc*, int*, int*, int*, int*, int*, int*, int*, int*,
 extern void pdgeadd_(char*, int*, int*, double*, double*, int*, int*, arr_desc*, double*, double*, int*, int*, arr_desc*);
 extern void pdsyevx_(char * jobz, char * range, char * uplo, int * n, double * a, int * ia, int * ja, arr_desc * desca, double * vl, double * vu, int * il, int * iu, double * abstol, int * m, int * nz, double * w, double * orfac, double * z, int * iz, int * jz, arr_desc * descz, double * work, int * lwork, int * iwork, int * liwork, int * ifail, int * iclustr, double * gap, int * info);
 extern void pdgemr2d_(int * m, int * n, double * a, int * ia, int * ja, arr_desc * desca, double * b, int * ib, int *jb, arr_desc * descb, int *ictxt);
+extern void pdsyrk_(char * uplo, char * trans, int * n, int * k, double * alpha, double * a, int * ia, int * ja, arr_desc * desca, double * beta, double * c, int * ic, int * jc, arr_desc * descc);
 extern double pdlange_(char * norm, int * m, int * n, double * a, int * ia, int * ja, arr_desc * desca, double * work);
 
 int gmc_pdsyevx(char uplo, int n, double * a, arr_desc desca, int il, int iu, double abstol, double ** w, double ** z, arr_desc * descz);
