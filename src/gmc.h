@@ -37,9 +37,6 @@ void free_gmc_result(gmc_result r);
 #define INLINE_GMC_INTERNALS
 #define PRINT_GMC_STEPS
 
-// Run frobenius norm on a single node, which may be faster on some systems
-//#define SEQ_NORM
-
 #ifdef INLINE_GMC_INTERNALS
     #define GMC_INTERNAL static inline
 #else

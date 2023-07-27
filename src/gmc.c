@@ -154,18 +154,10 @@ GMC_INTERNAL void __gmc_update_w(sparse_matrix * S0, matrix U, matrix w, int m, 
 
         // Redistribute matrix from row to block cyclic
         MPI_Gatherv(US.data, counts[rank], MPI_DOUBLE, US_global.data, counts, displs, MPI_DOUBLE, 0, comm);
+        gmc_distribute(num, num, US_global.data, US_local.data, blacs_row, blacs_col, blacs_width, blacs_height, nb, rank, comm);
 
-        #ifdef SEQ_NORM
-            double distUS;
-            if(!rank) distUS = LAPACKE_dlange(LAPACK_COL_MAJOR, 'F', num, num, US_global.data, num);
-            MPI_Bcast(&distUS, 1, MPI_DOUBLE, 0, comm);
-        #else
-            gmc_distribute(num, num, US_global.data, US_local.data, blacs_row, blacs_col, blacs_width, blacs_height, nb, rank, comm);
-
-            // Compute frobenius norm in parallel
-            double distUS = pdlange_("F", &num, &num, US_local.data, &ione, &ione, &desca_local, NULL);
-        #endif
-
+        // Compute frobenius norm in parallel
+        double distUS = pdlange_("F", &num, &num, US_local.data, &ione, &ione, &desca_local, NULL);
         w.data[v] = 0.5 / (distUS + EPS);
     }
 
@@ -344,15 +336,30 @@ gmc_result gmc(matrix * X, int m, int c, double lambda, bool normalize, MPI_Comm
 
         error = elpa_setup(handle);
 
-        elpa_set(handle, "nvidia-gpu", 1, &error);
-        if(error == ELPA_OK) {
-            elpa_set(handle, "solver", ELPA_SOLVER_2STAGE, &error);
-            if(!rank && error != ELPA_OK) printf("can't set 2stage\n");
-            elpa_set(handle, "real_kernel", ELPA_2STAGE_REAL_NVIDIA_GPU, &error);
-            if(!rank && error != ELPA_OK) printf("can't set gpu kernel\n");
-        } else if(!rank) {
-            fprintf(stderr, "Warning: ELPA GPU acceleration not supported\n");
-        }
+        elpa_set(handle, "solver", ELPA_SOLVER_2STAGE, &error);
+        if(!rank && error != ELPA_OK) printf("Warning: Couldn't set ELPA 2stage solver\n");
+
+        #ifdef ELPA_GPU
+            elpa_set(handle, "nvidia-gpu", 1, &error);
+            if(error == ELPA_OK) {
+                elpa_set(handle, "real_kernel", ELPA_2STAGE_REAL_NVIDIA_GPU, &error);
+                if(!rank && error != ELPA_OK) printf("Warning: Couldn't set ELPA gpu kernel\n");
+            } else if(!rank) {
+                fprintf(stderr, "Warning: ELPA GPU acceleration not supported\n");
+            }
+        #else
+            elpa_set(handle, "real_kernel", ELPA_2STAGE_REAL_AVX512_BLOCK2, &error);
+            if(!rank && error != ELPA_OK) printf("Warning: Couldn't set ELPA AVX512 kernel\n");
+
+            char * num_threads_env = getenv("OMP_NUM_THREADS");
+            if(num_threads_env) {
+                long long thread_num = strtol(getenv("OMP_NUM_THREADS"), NULL, 10);
+                if(thread_num) {
+                    elpa_set(handle, "omp_threads", thread_num, &error);
+                    if(!rank && error != ELPA_OK) printf("Warning: Couldn't set ELPA OMP threads to %d\n", thread_num);
+                }
+            }
+        #endif
     #endif
 
     if(!rank) {

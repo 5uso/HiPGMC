@@ -17,6 +17,7 @@
 #define EPS 2.2204460492503131e-16
 #define BLOCK_SIZE 64
 #define ELPA_API_VER 20221109
+//#define ELPA_GPU
 
 // Run square matrix multiplication on a single node, which may be faster on some systems
 //#define SEQ_SQR
