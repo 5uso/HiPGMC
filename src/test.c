@@ -18,8 +18,9 @@ static dataset data[] = {
 
 int main(int argc, char *argv[]) {
     // MPI Initialization
-    int rank, thread_support;
+    int rank, thread_support, numprocs;
     MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &thread_support);
+    MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
     if(thread_support != MPI_THREAD_MULTIPLE) {
@@ -28,7 +29,9 @@ int main(int argc, char *argv[]) {
     }
 
     // BLACS Initialization
-    int context, blacs_rows = 2, blacs_cols = 2;
+    int context, blacs_rows, blacs_cols;
+    grid_dims(numprocs, &blacs_rows, &blacs_cols);
+    if(!rank) printf("Process grid: %d rows, %d cols\n", blacs_rows, blacs_cols);
     Cblacs_get(0, 0, &context);
     Cblacs_gridinit(&context, "C", blacs_rows, blacs_cols);
 

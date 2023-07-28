@@ -22,3 +22,11 @@ matrix * generate_data(int samples, int views, int features, int clusters, doubl
 
     return r;
 }
+
+void grid_dims(int process_num, int * blacs_rows, int * blacs_cols) {
+    double s = sqrt((double) process_num);
+    int a = (int) lround(s);
+    while(process_num % a) a--;
+
+    *blacs_rows = process_num / a, *blacs_cols = a;
+}
