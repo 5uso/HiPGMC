@@ -293,7 +293,7 @@ elpa_t configure_elpa(int n, int nev) {
 
     elpa_t handle = elpa_allocate(&error);
     elpa_set(handle, "na", n, &error);
-    elpa_set(handle, "nev", 6, &error);
+    elpa_set(handle, "nev", nev, &error);
     elpa_set(handle, "nblk", nb, &error);
     elpa_set(handle, "mpi_comm_parent", MPI_Comm_c2f(comm), &error);
     elpa_set(handle, "process_row", blacs_row, &error);
