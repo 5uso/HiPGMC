@@ -11,6 +11,7 @@ static elpa_t handle;
 static int * pattern_cnts;
 static int * counts;
 static int * displs;
+static MPI_Datatype gmc_row_type;
 
 #ifdef PRINT_GMC_STEPS
     #include <sys/time.h>
@@ -19,15 +20,15 @@ static int * displs;
 
 GMC_INTERNAL void __gmc_normalize(matrix * X, int m, int num) {
     for(int v = 0; v < m; v++) {
-        int h = X[v].h, w = X[v].w;
+        long long h = X[v].h, w = X[v].w;
         #pragma omp parallel for
-        for(int x = 0; x < w; x++) {
+        for(long long x = 0; x < w; x++) {
             double mean = 0.0;
-            for(int y = 0; y < h; y++) mean += X[v].data[y * w + x];
+            for(long long y = 0; y < h; y++) mean += X[v].data[y * w + x];
             mean /= h;
 
             double std = 0.0;
-            for(int y = 0; y < h; y++) {
+            for(long long y = 0; y < h; y++) {
                 double dev = X[v].data[y * w + x] - mean;
                 std += dev * dev;
             }
@@ -35,36 +36,36 @@ GMC_INTERNAL void __gmc_normalize(matrix * X, int m, int num) {
             std = sqrt(std);
             if(std == 0) std = EPS;
 
-            for(int y = 0; y < h; y++) X[v].data[y * w + x] = (X[v].data[y * w + x] - mean) / std;
+            for(long long y = 0; y < h; y++) X[v].data[y * w + x] = (X[v].data[y * w + x] - mean) / std;
         }
     }
 }
 
 GMC_INTERNAL void __gmc_init_s0(matrix * X, int m, int num, sparse_matrix * S0, matrix * ed, double * sums) {
-    for(int v = 0; v < m; v++) {
+    for(long long v = 0; v < m; v++) {
         matrix ted; // Rank 0 computes square distance matrix and scatters
         ted = sqr_dist(rank ? ted : X[v], rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm);
         matrix local_ted = new_matrix(num, pattern_cnts[rank]);
-        MPI_Scatterv(ted.data, counts, displs, MPI_DOUBLE, local_ted.data, counts[rank], MPI_DOUBLE, 0, comm);
+        MPI_Scatterv(ted.data, counts, displs, gmc_row_type, local_ted.data, counts[rank], gmc_row_type, 0, comm);
         if(!rank) free_matrix(ted);
 
         S0[v] = new_sparse(PN + 1, local_ted.h);
         ed[v] = new_matrix(PN + 1, local_ted.h);
 
-        int s = displs[rank] / num; // Start pattern for this process
+        int s = displs[rank]; // Start pattern for this process
         #pragma omp parallel for
-        for(int y = 0; y < pattern_cnts[rank]; y++) {
+        for(long long y = 0; y < pattern_cnts[rank]; y++) {
             local_ted.data[y * num + s + y] = INFINITY;
             
             heap h = new_heap(local_ted.data + y * num, PN + 1);
-            for(int x = PN + 1; x < num; x++)
+            for(long long x = PN + 1; x < num; x++)
                 if(local_ted.data[y * num + x] < heap_max(h))
                     replace(&h, local_ted.data + y * num + x);
                 
             sums[v * pattern_cnts[rank] + y] = block_sum_ptr(h.data + 1, PN, 0);
             double denominator = *h.data[0] * PN - sums[v * pattern_cnts[rank] + y] + EPS;
 
-            for(int i = 0; i < PN + 1; i++) {
+            for(long long i = 0; i < PN + 1; i++) {
                 sprs_val val = {
                     .i = h.data[i] - (local_ted.data + y * num),
                     .value = ((*h.data[0] - *h.data[i]) / denominator) * (i > 0),
@@ -84,44 +85,44 @@ GMC_INTERNAL matrix __gmc_init_u(sparse_matrix * S0, int m, int num) {
     matrix U = new_matrix(num, pattern_cnts[rank]);
 
     // U starts as average of SIG matrices
-    memset(U.data, 0x00, num * pattern_cnts[rank] * sizeof(double));
+    memset(U.data, 0x00, (long long) num * (long long) pattern_cnts[rank] * sizeof(double));
 
     #pragma omp parallel for
-    for(int y = 0; y < pattern_cnts[rank]; y++) {
+    for(long long y = 0; y < pattern_cnts[rank]; y++) {
         double sum = 0.0;
-        for(int i = 0; i < PN + 1; i++)
+        for(long long i = 0; i < PN + 1; i++)
             for(int v = 0; v < m; v++) {
                 sprs_val val = S0[v].data[y * (PN + 1) + i];
                 double t = val.value / m;
                 U.data[y * num + val.i] += t;
                 sum += t;
             }
-        for(int x = 0; x < num; x++) U.data[y * num + x] /= sum;
+        for(long long x = 0; x < num; x++) U.data[y * num + x] /= sum;
     }
 
     return U;
 }
 
 GMC_INTERNAL void __gmc_update_s0(sparse_matrix * S0, matrix U, matrix w, int m, int num, matrix * ed, double * sums) {
-    for(int v = 0; v < m; v++) {
+    for(long long v = 0; v < m; v++) {
         double weight = w.data[v] * 2.0;
 
         #pragma omp parallel for
-        for(int y = 0; y < pattern_cnts[rank]; y++) {
+        for(long long y = 0; y < pattern_cnts[rank]; y++) {
             double max = ed[v].data[(PN + 1) * y];
             double maxU = U.data[y * num + S0[v].data[(PN + 1) * y].i];
 
             double sumU = 0.0;
-            for(int i = 1; i < PN + 1; i++) {
-                int x = S0[v].data[y * (PN + 1) + i].i;
+            for(long long i = 1; i < PN + 1; i++) {
+                long long x = S0[v].data[y * (PN + 1) + i].i;
                 sumU += U.data[y * num + x];
             }
 
             double numerator = max - weight * maxU;
             double denominator = PN * max - sums[v * pattern_cnts[rank] + y] + weight * (sumU - PN * maxU) + EPS;
 
-            for(int i = 0; i < PN + 1; i++) {
-                int x = S0[v].data[y * (PN + 1) + i].i;
+            for(long long i = 0; i < PN + 1; i++) {
+                long long x = S0[v].data[y * (PN + 1) + i].i;
                 double r = (numerator - ed[v].data[(PN + 1) * y + i] + weight * U.data[y * num + x]) / denominator;
                 S0[v].data[y * (PN + 1) + i].value = r * (r > 0.0);
             }
@@ -142,18 +143,18 @@ GMC_INTERNAL void __gmc_update_w(sparse_matrix * S0, matrix U, matrix w, int m, 
     descinit_(&desca_local, &num, &num, &nb, &nb, &izero, &izero, &blacs_ctx, &lld_local, &info);
 
     for(int v = 0; v < m; v++) {
-        memcpy(US.data, U.data, num * pattern_cnts[rank] * sizeof(double));
+        memcpy(US.data, U.data, (long long) num * (long long) pattern_cnts[rank] * sizeof(double));
         
         #pragma omp parallel for
-        for(int y = 0; y < pattern_cnts[rank]; y++)
-            for(int i = 0; i < PN + 1; i++) {
+        for(long long y = 0; y < pattern_cnts[rank]; y++)
+            for(long long i = 0; i < PN + 1; i++) {
                 sprs_val val = S0[v].data[y * (PN + 1) + i];
-                int x = val.i;
+                long long x = val.i;
                 US.data[y * num + x] -= val.value;
             }
 
         // Redistribute matrix from row to block cyclic
-        MPI_Gatherv(US.data, counts[rank], MPI_DOUBLE, US_global.data, counts, displs, MPI_DOUBLE, 0, comm);
+        MPI_Gatherv(US.data, counts[rank], gmc_row_type, US_global.data, counts, displs, gmc_row_type, 0, comm);
         gmc_distribute(num, num, US_global.data, US_local.data, blacs_row, blacs_col, blacs_width, blacs_height, nb, rank, comm);
 
         // Compute frobenius norm in parallel
@@ -169,21 +170,20 @@ GMC_INTERNAL void __gmc_update_u(sparse_matrix * S0, matrix U, matrix w, matrix 
     matrix dist; // Rank 0 computes square distance matrix and scatters
     dist = sqr_dist(*F, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm); // F is transposed, since LAPACK returns it in column major
     matrix local_dist = new_matrix(num, pattern_cnts[rank]);
-    MPI_Scatterv(dist.data, counts, displs, MPI_DOUBLE, local_dist.data, counts[rank], MPI_DOUBLE, 0, comm);
+    MPI_Scatterv(dist.data, counts, displs, gmc_row_type, local_dist.data, counts[rank], gmc_row_type, 0, comm);
     if(!rank) free_matrix(dist);
 
-
     #pragma omp parallel for
-    for(int y = 0; y < pattern_cnts[rank]; y++) {
+    for(long long y = 0; y < pattern_cnts[rank]; y++) {
         int qw = 0;
-        int * idx = malloc(num * sizeof(int));
+        int * idx = malloc((long long) num * sizeof(int));
 
         #ifdef IS_LOCAL
-            memset(idx, 0x00, num * sizeof(int));
+            memset(idx, 0x00, (long long) num * sizeof(int));
             for(int v = 0; v < m; v++) {
-                for(int i = 0; i < PN + 1; i++) {
+                for(long long i = 0; i < PN + 1; i++) {
                     sprs_val val = S0[v].data[y * (PN + 1) + i];
-                    int x = val.i;
+                    long long x = val.i;
                     qw -= idx[x];
                     idx[x] |= (val.value > 0);
                     qw += idx[x];
@@ -195,7 +195,7 @@ GMC_INTERNAL void __gmc_update_u(sparse_matrix * S0, matrix U, matrix w, matrix 
         #endif
 
         matrix q = new_matrix(qw, m);
-        for(int x = 0, i = 0; x < num; x++) {
+        for(long long x = 0, i = 0; x < num; x++) {
             if(idx[x]) {
                 q.data[i] = *lambda * local_dist.data[y * num + x] / (double) m * -0.5;
                 i++;
@@ -203,20 +203,20 @@ GMC_INTERNAL void __gmc_update_u(sparse_matrix * S0, matrix U, matrix w, matrix 
             } 
         }
 
-        for(int v = m - 1; v >= 0; v--)
-            for(int i = 0; i < qw; i++)
+        for(long long v = m - 1; v >= 0; v--)
+            for(long long i = 0; i < qw; i++)
                 q.data[v * qw + i] = q.data[i] / w.data[v];
 
-        for(int v = m - 1; v >= 0; v--) {
-            for(int i = 0; i < PN + 1; i++) {
+        for(long long v = m - 1; v >= 0; v--) {
+            for(long long i = 0; i < PN + 1; i++) {
                 sprs_val val = S0[v].data[y * (PN + 1) + i];
-                int x = val.i;
+                long long x = val.i;
                 if(idx[x]) q.data[v * qw + idx[x] - 1] += val.value;
             }
         }
 
         q = update_u(q);
-        for(int x = 0, i = 0; x < num; x++) {
+        for(long long x = 0, i = 0; x < num; x++) {
             if(idx[x]) {
                 U.data[y * num + x] = q.data[i];
                 i++;
@@ -252,8 +252,10 @@ GMC_INTERNAL bool __gmc_main_loop(int it, sparse_matrix * S0, matrix U, matrix w
     matrix temp = *F_old;
     *F_old = *F;
     *F = temp;
-    ev = evs.data + (c + 1) * it;
-    *F = update_f(*F, U, ev, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm, handle, counts, displs);
+    ev = evs.data + (long long)(c + 1) * (long long) it;
+
+    MPI_Gatherv(U.data, counts[rank], gmc_row_type, F->data, counts, displs, gmc_row_type, 0, comm);
+    *F = update_f(*F, U, ev, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm, handle);
 
     // Update lambda
     GMC_STEP("update lambda", it);
@@ -386,16 +388,19 @@ gmc_result gmc(matrix * X, int m, int c, double lambda, bool normalize, MPI_Comm
     }
 
     // Determine how many patterns correspond to each process
-    pattern_cnts = malloc(numprocs * sizeof(int));
-    counts = malloc(numprocs * sizeof(int));
-    displs = malloc(numprocs * sizeof(int));
+    pattern_cnts = malloc((long long) numprocs * sizeof(int));
+    counts = malloc((long long) numprocs * sizeof(int));
+    displs = malloc((long long) numprocs * sizeof(int));
     int displacement = 0;
     for(int i = 0; i < numprocs; i++) {
         pattern_cnts[i] = num / numprocs + (i < num % numprocs);
-        counts[i] = pattern_cnts[i] * num;
+        counts[i] = pattern_cnts[i];
         displs[i] = displacement;
         displacement += counts[i];
     }
+
+    gmc_row_type = gmc_contiguous_long(MPI_DOUBLE, num);
+    MPI_Type_commit(&gmc_row_type);
 
     // Initialize SIG matrices
     GMC_STEP("Init: SIG matrices");
@@ -416,7 +421,8 @@ gmc_result gmc(matrix * X, int m, int c, double lambda, bool normalize, MPI_Comm
         evs = new_matrix(c + 1, NITER + 1);
     }
 
-    F = update_f(F, U, evs.data, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm, handle, counts, displs);
+    MPI_Gatherv(U.data, counts[rank], gmc_row_type, F.data, counts, displs, gmc_row_type, 0, comm);
+    F = update_f(F, U, evs.data, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm, handle);
 
     // Initialize w to m uniform (All views start with the same weight)
     GMC_STEP("Init: w");
@@ -433,26 +439,24 @@ gmc_result gmc(matrix * X, int m, int c, double lambda, bool normalize, MPI_Comm
     // Gather data to build final result
     matrix local_U = U;
     if(!rank) U = new_matrix(num, num);
-    MPI_Gatherv(local_U.data, counts[rank], MPI_DOUBLE, U.data, counts, displs, MPI_DOUBLE, 0, comm);
+    MPI_Gatherv(local_U.data, counts[rank], gmc_row_type, U.data, counts, displs, gmc_row_type, 0, comm);
     free_matrix(local_U);
 
-    // Counts and displacements differ on sparse matrices
-    displacement = 0;
-    for(int i = 0; i < numprocs; i++) {
-        counts[i] = pattern_cnts[i] * (PN + 1) * sizeof(sprs_val);
-        displs[i] = displacement;
-        displacement += counts[i];
-    }
+    // Row type differs on sparse matrices
+    MPI_Type_free(&gmc_row_type);
+    gmc_row_type = gmc_contiguous_long(MPI_BYTE, (long long) (PN + 1) * sizeof(sprs_val));
+    MPI_Type_commit(&gmc_row_type);
 
     // Collect SIG for each view
     for(int v = 0; v < m; v++) {
         sparse_matrix local_SIG = S0[v];
         if(!rank) S0[v] = new_sparse(PN + 1, num);
-        MPI_Gatherv(local_SIG.data, counts[rank], MPI_BYTE, S0[v].data, counts, displs, MPI_BYTE, 0, comm);
+        MPI_Gatherv(local_SIG.data, counts[rank], gmc_row_type, S0[v].data, counts, displs, gmc_row_type, 0, comm);
         free_sparse(local_SIG);
     }
 
     // Cleanup, with workers
+    MPI_Type_free(&gmc_row_type);
     for(int i = 0; i < m; i++) free_matrix(ed[i]);
     free(sums); free(ed); free_matrix(w);
     free(displs); free(counts); free(pattern_cnts);
@@ -470,15 +474,15 @@ gmc_result gmc(matrix * X, int m, int c, double lambda, bool normalize, MPI_Comm
 
     // Adjacency matrix
     GMC_STEP("End: symU");
-    bool * adj = malloc(num * num * sizeof(bool));
+    bool * adj = malloc((long long) num * (long long) num * sizeof(bool));
     #pragma omp parallel for
-    for(int j = 0; j < num; j++)
-        for(int x = 0; x < j; x++)
+    for(long long j = 0; j < num; j++)
+        for(long long x = 0; x < j; x++)
             adj[j * num + x] = (U.data[j * num + x] != 0.0) || (U.data[x * num + j] != 0.0);
 
     // Final clustering. Find connected components on sU with Tarjan's algorithm
     GMC_STEP("End: final clustering");
-    int * y = malloc(num * sizeof(int));
+    int * y = malloc((long long) num * sizeof(int));
     int cluster_num = connected_comp(adj, y, num);
 
     // Cleanup

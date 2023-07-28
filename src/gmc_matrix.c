@@ -1,10 +1,10 @@
 #include "gmc_matrix.h"
 
 matrix new_matrix(int w, int h) {
-    matrix m;
-    m.w = w; m.h = h;
-    m.data = malloc(w * h * sizeof(double));
-
+    matrix m = {
+        .w = w, .h = h,
+        .data = malloc((long long) w * (long long) h * sizeof(double)),
+    };
     return m;
 }
 
@@ -13,17 +13,17 @@ void free_matrix(matrix m) {
 }
 
 void print(matrix m) {
-    for(int j = 0; j < m.h; j++) {
-        for(int i = 0; i < m.w; i++) printf("%10.4lf", m.data[j * m.w + i]);
+    for(long long j = 0; j < m.h; j++) {
+        for(long long i = 0; i < m.w; i++) printf("%10.4lf", m.data[j * m.w + i]);
         printf("\n");
     }
 }
 
 sparse_matrix new_sparse(int w, int h) {
-    sparse_matrix m;
-    m.w = w; m.h = h;
-    m.data = malloc(w * h * sizeof(sprs_val));
-
+    sparse_matrix m = {
+        .w = w, .h = h,
+        .data = malloc((long long) w * (long long) h * sizeof(sprs_val)),
+    };
     return m;
 }
 

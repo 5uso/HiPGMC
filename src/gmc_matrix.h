@@ -5,8 +5,8 @@
 #include <stdio.h>
 
 typedef struct matrix {
-    int w; int h;     // Width & Height
-    double *  data;     // Matrix contents
+    int w; int h; // Width & Height
+    double *data; // Matrix contents
 } matrix;
 
 typedef struct sprs_val {
@@ -14,8 +14,8 @@ typedef struct sprs_val {
 } sprs_val;
 
 typedef struct sparse_matrix {
-    int w; int h;     // Width & Height (width is the number of non zero elements per row)
-    sprs_val *data;     // Matrix contents
+    int w; int h;   // Width & Height (width is the number of non zero elements per row)
+    sprs_val *data; // Matrix contents
 } sparse_matrix;
 
 matrix new_matrix(int w, int h);

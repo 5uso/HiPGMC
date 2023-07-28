@@ -10,7 +10,7 @@ matrix * generate_data(int samples, int views, int features, int clusters, doubl
     matrix * r = malloc(views * sizeof(matrix));
     for(int v = 0; v < views; v++) {
         r[v] = new_matrix(samples, features);
-        int pos = 0;
+        long long pos = 0;
         for(int y = 0; y < features; y++) {
             int part = y % clusters;
             for(int x = 0; x < samples; x++, pos++) {

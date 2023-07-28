@@ -49,8 +49,8 @@ matrix sqr_dist(matrix m, int rank, int blacs_row, int blacs_col, int blacs_heig
     // Compute final matrix
     matrix d = new_matrix(m.w, m.w);
     #pragma omp parallel for
-    for(int i = 0; i < m.w; i++) {
-        for(int j = 0; j < m.w; j++) {
+    for(long long i = 0; i < m.w; i++) {
+        for(long long j = 0; j < m.w; j++) {
             if(i == j) {
                 d.data[j * d.w + i] = d.data[i * d.w + j] = 0.0;
                 continue;
@@ -67,8 +67,8 @@ matrix sqr_dist(matrix m, int rank, int blacs_row, int blacs_col, int blacs_heig
 }
 
 matrix update_u(matrix q) { // Height of q is m
-    for(int j = 1; j < q.h; j++) {
-        for(int i = 0; i < q.w; i++) q.data[i] += q.data[j * q.w + i];
+    for(long long j = 1; j < q.h; j++) {
+        for(long long i = 0; i < q.w; i++) q.data[i] += q.data[j * q.w + i];
     }
 
     double mean = 0.0;
@@ -112,19 +112,16 @@ matrix update_u(matrix q) { // Height of q is m
 }
 
 matrix update_f(matrix F, matrix U, double * ev, int c, int rank, int blacs_row, int blacs_col, int blacs_height, int blacs_width, int blacs_ctx,
-                MPI_Comm comm, elpa_t handle, int * counts, int * displs) {
+                MPI_Comm comm, elpa_t handle) {
     int izero = 0, nb = BLOCK_SIZE, info;
     arr_desc fd, flocald;
 
     int n = F.w;
     MPI_Bcast(&n, 1, MPI_INT, 0, comm);
 
-    // Gather U into rank 0
-    MPI_Gatherv(U.data, counts[rank], MPI_DOUBLE, F.data, counts, displs, MPI_DOUBLE, 0, comm);
-
     if(!rank) {
-        for(int y = 0; y < F.w; y++) {
-            for(int x = y; x < F.w; x++)
+        for(long long y = 0; y < F.w; y++) {
+            for(long long x = y; x < F.w; x++)
                 F.data[y * F.w + x] = F.data[x * F.w + y] = (F.data[y * F.w + x] + F.data[x * F.w + y]) / -2.0;
                 
             F.data[y * F.w + y] -= block_sum(F.data + y * F.w + y + 1, F.w - y - 1) + block_sum_col(F.data + y, y, F.w);
@@ -150,7 +147,7 @@ matrix update_f(matrix F, matrix U, double * ev, int c, int rank, int blacs_row,
     double *eigenvectors, *eigenvalues;
     #ifdef ELPA_API_VER
         int error;
-        eigenvalues = malloc(n * sizeof(double)), eigenvectors = malloc(mp * nq * sizeof(double));
+        eigenvalues = malloc((long long) n * sizeof(double)), eigenvectors = malloc((long long) mp * (long long) nq * sizeof(double));
         elpa_eigenvectors(handle, f_local.data, eigenvalues, eigenvectors, &error);
     #else
         arr_desc eigvecd;
@@ -161,7 +158,7 @@ matrix update_f(matrix F, matrix U, double * ev, int c, int rank, int blacs_row,
     gmc_collect(n, n, eigenvectors, F.data, blacs_row, blacs_col, blacs_width, blacs_height, nb, rank, comm);
     F.h = c;
 
-    if(!rank) memcpy(ev, eigenvalues, (c + 1) * sizeof(double));
+    if(!rank) memcpy(ev, eigenvalues, (long long) (c + 1) * sizeof(double));
 
     free_matrix(f_local);
     free(eigenvectors);
@@ -199,8 +196,8 @@ int connected_comp(bool * adj, int * y, int num) {
         ranks[i] = 0;
     }
     
-    for(int j = 0; j < num; j++)
-        for(int x = 0; x < j; x++)
+    for(long long j = 0; j < num; j++)
+        for(long long x = 0; x < j; x++)
             if(adj[j * num + x]) {
                 int parentJ = __find_comp(parents, j);
                 int parentX = __find_comp(parents, x);

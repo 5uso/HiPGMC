@@ -15,11 +15,12 @@ double block_sum_col(double * arr, int n, int width) {
     if(n == 0) return 0.0;
 
     double sum0 = 0.0, sum1 = 0.0;
+    long long w = width;
 
     for(int i = 0; i < n - 1; i++)
-        sum0 += arr[i * width], sum1 += arr[++i * width];
+        sum0 += arr[i * w], sum1 += arr[++i * w];
 
-    return (sum0 + sum1) + arr[(n - 1) * width] * (n % 2);
+    return (sum0 + sum1) + arr[(n - 1) * w] * (n % 2);
 }
 
 double block_sum_ptr(double ** arr, int n, long long offset) {
@@ -37,12 +38,13 @@ double block_sum_col_sqr(double * arr, int n, int width) {
     if(n == 0) return 0.0;
 
     double sum0 = 0.0, sum1 = 0.0;
+    long long w = width;
 
     for(int i = 0; i < n - 1; i++) {
-        sum0 += arr[i * width] * arr[i * width];
+        sum0 += arr[i * w] * arr[i * w];
         i++;
-        sum1 += arr[i * width] * arr[i * width];
+        sum1 += arr[i * w] * arr[i * w];
     }
 
-    return (sum0 + sum1) + arr[(n - 1) * width] * arr[(n - 1) * width] * (n % 2);
+    return (sum0 + sum1) + arr[(n - 1) * w] * arr[(n - 1) * w] * (n % 2);
 }
