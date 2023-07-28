@@ -255,7 +255,7 @@ GMC_INTERNAL bool __gmc_main_loop(int it, sparse_matrix * S0, matrix U, matrix w
     ev = evs.data + (long long)(c + 1) * (long long) it;
 
     MPI_Gatherv(U.data, counts[rank], gmc_row_type, F->data, counts, displs, gmc_row_type, 0, comm);
-    *F = update_f(*F, U, ev, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm, handle);
+    *F = update_f(*F, ev, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm, handle);
 
     // Update lambda
     GMC_STEP("update lambda", it);
@@ -422,7 +422,7 @@ gmc_result gmc(matrix * X, int m, int c, double lambda, bool normalize, MPI_Comm
     }
 
     MPI_Gatherv(U.data, counts[rank], gmc_row_type, F.data, counts, displs, gmc_row_type, 0, comm);
-    F = update_f(F, U, evs.data, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm, handle);
+    F = update_f(F, evs.data, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm, handle);
 
     // Initialize w to m uniform (All views start with the same weight)
     GMC_STEP("Init: w");

@@ -111,10 +111,10 @@ matrix update_u(matrix q) { // Height of q is m
     return q;
 }
 
-matrix update_f(matrix F, matrix U, double * ev, int c, int rank, int blacs_row, int blacs_col, int blacs_height, int blacs_width, int blacs_ctx,
+matrix update_f(matrix F, double * ev, int c, int rank, int blacs_row, int blacs_col, int blacs_height, int blacs_width, int blacs_ctx,
                 MPI_Comm comm, elpa_t handle) {
     int izero = 0, nb = BLOCK_SIZE, info;
-    arr_desc fd, flocald;
+    arr_desc flocald;
 
     int n = F.w;
     MPI_Bcast(&n, 1, MPI_INT, 0, comm);
@@ -137,7 +137,6 @@ matrix update_f(matrix F, matrix U, double * ev, int c, int rank, int blacs_row,
     // Original F has block size equal to total matrix size, since it's only on process 0
     // Distributed F is properly configured to be shared between processes
     int lld_local = mp > 1 ? mp : 1;
-    descinit_(&fd, &n, &n, &n, &n, &izero, &izero, &blacs_ctx, &n, &info);
     descinit_(&flocald, &n, &n, &nb, &nb, &izero, &izero, &blacs_ctx, &lld_local, &info);
     gmc_distribute(n, n, F.data, f_local.data, blacs_row, blacs_col, blacs_width, blacs_height, nb, rank, comm);
 

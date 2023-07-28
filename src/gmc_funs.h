@@ -24,7 +24,7 @@
 
 matrix sqr_dist(matrix m, int rank, int blacs_row, int blacs_col, int blacs_height, int blacs_width, int blacs_ctx, MPI_Comm comm);
 matrix update_u(matrix q);
-matrix update_f(matrix F, matrix U, double * ev, int c, int rank, int blacs_row, int blacs_col, int blacs_height, int blacs_width, int blacs_ctx, MPI_Comm comm, elpa_t handle);
+matrix update_f(matrix F, double * ev, int c, int rank, int blacs_row, int blacs_col, int blacs_height, int blacs_width, int blacs_ctx, MPI_Comm comm, elpa_t handle);
 int connected_comp(bool * adj, int * y, int num);
 
 #endif
