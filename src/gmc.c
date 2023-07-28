@@ -282,6 +282,69 @@ GMC_INTERNAL bool __gmc_main_loop(int it, sparse_matrix * S0, matrix U, matrix w
     return end_iteration;
 }
 
+elpa_t configure_elpa(int n, int nev) {
+    int error, izero = 0, nb = BLOCK_SIZE;
+    if(elpa_init(ELPA_API_VER) != ELPA_OK) {
+        fprintf(stderr, "{ %d, %d } Error: ELPA API version not supported\n", blacs_row, blacs_col);
+        exit(1);
+    }
+
+    elpa_t handle = elpa_allocate(&error);
+    elpa_set(handle, "na", n, &error);
+    elpa_set(handle, "nev", 6, &error);
+    elpa_set(handle, "nblk", nb, &error);
+    elpa_set(handle, "mpi_comm_parent", MPI_Comm_c2f(comm), &error);
+    elpa_set(handle, "process_row", blacs_row, &error);
+    elpa_set(handle, "process_col", blacs_col, &error);
+    elpa_set(handle, "blacs_context", blacs_ctx, &error);
+
+    arr_desc descriptor;
+    int mp = numroc_(&n, &nb, &blacs_row, &izero, &blacs_height);
+    int nq = numroc_(&n, &nb, &blacs_col, &izero, &blacs_width);
+    int lld = mp > 1 ? mp : 1;
+    descinit_(&descriptor, &n, &n, &nb, &nb, &izero, &izero, &blacs_ctx, &lld, &error);
+    if(error) {
+        fprintf(stderr, "{ %d, %d } Error: Invalid distribution, descinit arg %d\n", blacs_row, blacs_col, -error);
+        exit(1);
+    }
+
+    elpa_set(handle, "local_nrows", mp, &error);
+    elpa_set(handle, "local_ncols", nq, &error);
+
+    error = elpa_setup(handle);
+    if(error != ELPA_OK) {
+        fprintf(stderr, "{ %d, %d } Error: Elpa setup returned code %d\n", blacs_row, blacs_col, error);
+        exit(1);
+    }
+
+    elpa_set(handle, "solver", ELPA_SOLVER_2STAGE, &error);
+    if(!rank && error != ELPA_OK) fprintf(stderr, "Warning: Couldn't set ELPA 2stage solver\n");
+
+    #ifdef ELPA_GPU
+        elpa_set(handle, "nvidia-gpu", 1, &error);
+        if(error == ELPA_OK) {
+            elpa_set(handle, "real_kernel", ELPA_2STAGE_REAL_NVIDIA_GPU, &error);
+            if(!rank && error != ELPA_OK) fprintf(stderr, "Warning: Couldn't set ELPA gpu kernel\n");
+        } else if(!rank) {
+            fprintf(stderr, "Warning: ELPA GPU acceleration not supported\n");
+        }
+    #else
+        elpa_set(handle, "real_kernel", ELPA_2STAGE_REAL_AVX512_BLOCK2, &error);
+        if(!rank && error != ELPA_OK) printf("Warning: Couldn't set ELPA AVX512 kernel\n");
+
+        char * num_threads_env = getenv("OMP_NUM_THREADS");
+        if(num_threads_env) {
+            int thread_num = (int) strtol(num_threads_env, NULL, 10);
+            if(thread_num) {
+                elpa_set(handle, "omp_threads", thread_num, &error);
+                if(!rank && error != ELPA_OK) fprintf(stderr, "Warning: Couldn't set ELPA OMP threads to %d\n", thread_num);
+            }
+        }
+    #endif
+
+    return handle;
+}
+
 gmc_result gmc(matrix * X, int m, int c, double lambda, bool normalize, MPI_Comm in_comm, int in_context) {
     #ifdef PRINT_GMC_STEPS
         gettimeofday(&begin, 0);
@@ -310,56 +373,10 @@ gmc_result gmc(matrix * X, int m, int c, double lambda, bool normalize, MPI_Comm
 
     MPI_Bcast(&params, sizeof(params), MPI_BYTE, 0, comm);
     m = params.m, c = params.c, lambda = params.l, normalize = params.norm;
-    int num = params.n, nb = BLOCK_SIZE, izero = 0;
+    int num = params.n;
 
     #ifdef ELPA_API_VER
-        // Set up ELPA
-        int error;
-        if (elpa_init(ELPA_API_VER) != ELPA_OK) {
-            fprintf(stderr, "{ %d, %d } Error: ELPA API version not supported\n", blacs_row, blacs_col);
-            exit(1);
-        }
-
-        handle = elpa_allocate(&error);
-        elpa_set(handle, "na", num, &error);
-        elpa_set(handle, "nev", c + 1, &error);
-        elpa_set(handle, "nblk", nb, &error);
-        elpa_set(handle, "mpi_comm_parent", MPI_Comm_c2f(comm), &error);
-        elpa_set(handle, "process_row", blacs_row, &error);
-        elpa_set(handle, "process_col", blacs_col, &error);
-        elpa_set(handle, "blacs_context", blacs_ctx, &error);
-
-        int mp = numroc_(&num, &nb, &blacs_row, &izero, &blacs_height);
-        int nq = numroc_(&num, &nb, &blacs_col, &izero, &blacs_width);
-        elpa_set(handle, "local_nrows", mp, &error);
-        elpa_set(handle, "local_ncols", nq, &error);
-
-        error = elpa_setup(handle);
-
-        elpa_set(handle, "solver", ELPA_SOLVER_2STAGE, &error);
-        if(!rank && error != ELPA_OK) printf("Warning: Couldn't set ELPA 2stage solver\n");
-
-        #ifdef ELPA_GPU
-            elpa_set(handle, "nvidia-gpu", 1, &error);
-            if(error == ELPA_OK) {
-                elpa_set(handle, "real_kernel", ELPA_2STAGE_REAL_NVIDIA_GPU, &error);
-                if(!rank && error != ELPA_OK) printf("Warning: Couldn't set ELPA gpu kernel\n");
-            } else if(!rank) {
-                fprintf(stderr, "Warning: ELPA GPU acceleration not supported\n");
-            }
-        #else
-            elpa_set(handle, "real_kernel", ELPA_2STAGE_REAL_AVX512_BLOCK2, &error);
-            if(!rank && error != ELPA_OK) printf("Warning: Couldn't set ELPA AVX512 kernel\n");
-
-            char * num_threads_env = getenv("OMP_NUM_THREADS");
-            if(num_threads_env) {
-                long long thread_num = strtol(getenv("OMP_NUM_THREADS"), NULL, 10);
-                if(thread_num) {
-                    elpa_set(handle, "omp_threads", thread_num, &error);
-                    if(!rank && error != ELPA_OK) printf("Warning: Couldn't set ELPA OMP threads to %d\n", thread_num);
-                }
-            }
-        #endif
+        handle = configure_elpa(num, c + 1);
     #endif
 
     if(!rank) {
@@ -440,6 +457,7 @@ gmc_result gmc(matrix * X, int m, int c, double lambda, bool normalize, MPI_Comm
     free(sums); free(ed); free_matrix(w);
     free(displs); free(counts); free(pattern_cnts);
     #ifdef ELPA_API_VER
+        int error;
         elpa_deallocate(handle, &error);
         elpa_uninit(&error);
     #endif
