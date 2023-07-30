@@ -8,8 +8,6 @@
 
 #include <elpa/elpa.h>
 #include <stdbool.h>
-#include <lapacke.h>
-#include <cblas.h>
 #include <math.h>
 #include <mpi.h>
 #include <omp.h>

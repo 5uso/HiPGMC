@@ -14,7 +14,8 @@ matrix sqr_dist(matrix m, int rank, int blacs_row, int blacs_col, int blacs_heig
     #ifdef SEQ_SQR
         if(rank) return m;
         matrix mt = new_matrix(m.w, m.w);
-        cblas_dsyrk(CblasRowMajor, CblasUpper, CblasTrans, m.w, m.h, 1.0, m.data, m.w, 0.0, mt.data, m.w);
+        double done = 1.0, dzero = 0.0;
+        dsyrk_("L", "N", &m.w, &m.h, &done, m.data, &m.w, &dzero, mt.data, &m.w);
     #else
         // Distribute m
         MPI_Bcast(&m, sizeof(matrix), MPI_BYTE, 0, comm);
