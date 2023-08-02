@@ -9,9 +9,7 @@ static int blacs_ctx;
 static elpa_t handle;
 
 static int * pattern_cnts;
-static int * counts;
 static int * displs;
-static MPI_Datatype gmc_row_type;
 
 #ifdef PRINT_GMC_STEPS
     #include <sys/time.h>
@@ -46,7 +44,7 @@ GMC_INTERNAL void __gmc_init_s0(matrix * X, int m, int num, sparse_matrix * S0, 
         matrix ted; // Rank 0 computes square distance matrix and scatters
         ted = sqr_dist(rank ? ted : X[v], rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm);
         matrix local_ted = new_matrix(num, pattern_cnts[rank]);
-        MPI_Scatterv(ted.data, counts, displs, gmc_row_type, local_ted.data, counts[rank], gmc_row_type, 0, comm);
+        gmc_scatter((long long) ted.w * sizeof(double), ted.h, ted.data, local_ted.data, rank, numprocs, comm);
         if(!rank) free_matrix(ted);
 
         S0[v] = new_sparse(PN + 1, local_ted.h);
@@ -154,8 +152,8 @@ GMC_INTERNAL void __gmc_update_w(sparse_matrix * S0, matrix U, matrix w, int m, 
             }
 
         // Redistribute matrix from row to block cyclic
-        MPI_Gatherv(US.data, counts[rank], gmc_row_type, US_global.data, counts, displs, gmc_row_type, 0, comm);
-        gmc_distribute(num, num, US_global.data, US_local.data, blacs_row, blacs_col, blacs_width, blacs_height, nb, rank, comm);
+        gmc_gather((long long) US_global.w * sizeof(double), US_global.h, US.data, US_global.data, rank, numprocs, comm);
+        gmc_distribute(num, num, US_global.data, US_local.data, rank, blacs_width, blacs_height, nb, comm);
 
         // Compute frobenius norm in parallel
         double distUS = pdlange_("F", &num, &num, US_local.data, &ione, &ione, &desca_local, NULL);
@@ -170,7 +168,7 @@ GMC_INTERNAL void __gmc_update_u(sparse_matrix * S0, matrix U, matrix w, matrix 
     matrix dist; // Rank 0 computes square distance matrix and scatters
     dist = sqr_dist(*F, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm); // F is transposed, since LAPACK returns it in column major
     matrix local_dist = new_matrix(num, pattern_cnts[rank]);
-    MPI_Scatterv(dist.data, counts, displs, gmc_row_type, local_dist.data, counts[rank], gmc_row_type, 0, comm);
+    gmc_scatter((long long) dist.w * sizeof(double), dist.h, dist.data, local_dist.data, rank, numprocs, comm);
     if(!rank) free_matrix(dist);
 
     #pragma omp parallel for
@@ -254,7 +252,7 @@ GMC_INTERNAL bool __gmc_main_loop(int it, sparse_matrix * S0, matrix U, matrix w
     *F = temp;
     ev = evs.data + (long long)(c + 1) * (long long) it;
 
-    MPI_Gatherv(U.data, counts[rank], gmc_row_type, F->data, counts, displs, gmc_row_type, 0, comm);
+    gmc_gather((long long) num * sizeof(double), num, U.data, F->data, rank, numprocs, comm);
     *F = update_f(*F, ev, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm, handle);
 
     // Update lambda
@@ -389,18 +387,13 @@ gmc_result gmc(matrix * X, int m, int c, double lambda, bool normalize, MPI_Comm
 
     // Determine how many patterns correspond to each process
     pattern_cnts = malloc((long long) numprocs * sizeof(int));
-    counts = malloc((long long) numprocs * sizeof(int));
     displs = malloc((long long) numprocs * sizeof(int));
     int displacement = 0;
     for(int i = 0; i < numprocs; i++) {
         pattern_cnts[i] = num / numprocs + (i < num % numprocs);
-        counts[i] = pattern_cnts[i];
         displs[i] = displacement;
-        displacement += counts[i];
+        displacement += pattern_cnts[i];
     }
-
-    gmc_row_type = gmc_contiguous_long(MPI_DOUBLE, num);
-    MPI_Type_commit(&gmc_row_type);
 
     // Initialize SIG matrices
     GMC_STEP("Init: SIG matrices");
@@ -421,7 +414,7 @@ gmc_result gmc(matrix * X, int m, int c, double lambda, bool normalize, MPI_Comm
         evs = new_matrix(c + 1, NITER + 1);
     }
 
-    MPI_Gatherv(U.data, counts[rank], gmc_row_type, F.data, counts, displs, gmc_row_type, 0, comm);
+    gmc_gather((long long) F.w * sizeof(double), F.h, U.data, F.data, rank, numprocs, comm);
     F = update_f(F, evs.data, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm, handle);
 
     // Initialize w to m uniform (All views start with the same weight)
@@ -439,27 +432,21 @@ gmc_result gmc(matrix * X, int m, int c, double lambda, bool normalize, MPI_Comm
     // Gather data to build final result
     matrix local_U = U;
     if(!rank) U = new_matrix(num, num);
-    MPI_Gatherv(local_U.data, counts[rank], gmc_row_type, U.data, counts, displs, gmc_row_type, 0, comm);
+    gmc_gather((long long) U.w * sizeof(double), U.h, local_U.data, U.data, rank, numprocs, comm);
     free_matrix(local_U);
-
-    // Row type differs on sparse matrices
-    MPI_Type_free(&gmc_row_type);
-    gmc_row_type = gmc_contiguous_long(MPI_BYTE, (long long) (PN + 1) * sizeof(sprs_val));
-    MPI_Type_commit(&gmc_row_type);
 
     // Collect SIG for each view
     for(int v = 0; v < m; v++) {
         sparse_matrix local_SIG = S0[v];
         if(!rank) S0[v] = new_sparse(PN + 1, num);
-        MPI_Gatherv(local_SIG.data, counts[rank], gmc_row_type, S0[v].data, counts, displs, gmc_row_type, 0, comm);
+        gmc_gather((long long) S0[v].w * sizeof(sprs_val), S0[v].h, local_SIG.data, S0[v].data, rank, numprocs, comm);
         free_sparse(local_SIG);
     }
 
     // Cleanup, with workers
-    MPI_Type_free(&gmc_row_type);
     for(int i = 0; i < m; i++) free_matrix(ed[i]);
     free(sums); free(ed); free_matrix(w);
-    free(displs); free(counts); free(pattern_cnts);
+    free(displs); free(pattern_cnts);
     #ifdef ELPA_API_VER
         int error;
         elpa_deallocate(handle, &error);

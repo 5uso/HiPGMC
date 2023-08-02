@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <limits.h>
+#include <string.h>
 #include <math.h>
 #include <omp.h>
 #include <mpi.h>
@@ -10,6 +11,8 @@
 typedef struct arr_desc {
     int dtype, ctxt, m, n, mb, nb, rsrc, csrc, lld;
 } arr_desc;
+
+#define MAX_MPI_MSG_BYTES 16777216
 
 extern void Cblacs_pinfo(int*, int*);
 extern void Cblacs_get(int, int, int*);
@@ -30,9 +33,10 @@ extern void pdsyrk_(char * uplo, char * trans, int * n, int * k, double * alpha,
 extern void dsyrk_(char * uplo, char * trans, int * n, int * k, double * alpha, double * a, int * lda, double * beta, double * c, int * ldc);
 extern double pdlange_(char * norm, int * m, int * n, double * a, int * ia, int * ja, arr_desc * desca, double * work);
 
-MPI_Datatype gmc_contiguous_long(MPI_Datatype type, long long count);
 int gmc_pdsyevx(char uplo, int n, double * a, arr_desc desca, int il, int iu, double abstol, double ** w, double ** z, arr_desc * descz);
-void gmc_distribute(int w, int h, double * a, double * b, int blacs_row, int blacs_col, int blacs_width, int blacs_height, int nb, int rank, MPI_Comm comm);
-void gmc_collect(int w, int h, double * a, double * b, int blacs_row, int blacs_col, int blacs_width, int blacs_height, int nb, int rank, MPI_Comm comm);
+void gmc_distribute(int w, int h, double * a, double * b, int rank, int blacs_width, int blacs_height, int nb, MPI_Comm comm);
+void gmc_collect(int w, int h, double * a, double * b, int rank, int blacs_width, int blacs_height, int nb, MPI_Comm comm);
+void gmc_scatter(long long w, int h, void * a, void * b, int rank, int numprocs, MPI_Comm comm);
+void gmc_gather(long long w, int h, void * a, void * b, int rank, int numprocs, MPI_Comm comm);
 
 #endif

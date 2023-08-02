@@ -4,6 +4,10 @@ static inline int _max(int a, int b) {
     return b > a ? b : a;
 }
 
+static inline long long _minl(long long a, long long b) {
+    return b < a ? b : a;
+}
+
 int gmc_pdsyevx(char uplo, int n, double * a, arr_desc desca, int il, int iu, double abstol, double ** w, double ** z, arr_desc * descz) {
     // Blacs info
     int ctx = desca.ctxt, nb = desca.nb, blacs_height, blacs_width, blacs_row, blacs_col;
@@ -59,100 +63,232 @@ int gmc_pdsyevx(char uplo, int n, double * a, arr_desc desca, int il, int iu, do
     return info;
 }
 
-MPI_Datatype gmc_contiguous_long(MPI_Datatype type, long long count) {
-    MPI_Datatype result;
-
-    long long blocks = count / INT_MAX + 1;
-    long long remainder = count % INT_MAX;
-
-    MPI_Count element_size;
-    MPI_Type_size_x(type, &element_size);
-    
-    int lengths[blocks]; MPI_Aint displs[blocks], d = 0; MPI_Datatype types[blocks];
-    for(int i = 0; i < blocks; i++) {
-        lengths[i] = INT_MAX;
-        displs[i] = d;
-        types[i] = type;
-        d += INT_MAX * element_size;
-    }
-    lengths[blocks - 1] = remainder;
-
-    // Construct a datatype with repetitions of the original type
-    MPI_Type_create_struct(blocks, lengths, displs, types, &result);
-
-    return result;
-}
-
-void gmc_distribute(int w, int h, double * a, double * b, int blacs_row, int blacs_col, int blacs_width, int blacs_height, int nb, int rank, MPI_Comm comm) {
-    // Configure 2D block-cyclic distribution
-    int numprocs = blacs_width * blacs_height, izero = 0;
-    int global_dims[] = { h, w };
-    int distr_modes[] = { MPI_DISTRIBUTE_CYCLIC, MPI_DISTRIBUTE_CYCLIC };
-    int distr_block[] = { nb, nb };
-    int procgr_dims[] = { blacs_width, blacs_height };
-
-    // Dimensions of local matrix
-    int mp = numroc_(&w, &nb, &blacs_row, &izero, &blacs_height);
-    int nq = numroc_(&h, &nb, &blacs_col, &izero, &blacs_width);
-
-    if(!rank) {
-        #pragma omp parallel for
-        for(int r = numprocs - 1; r >= 0; r--) {
-            MPI_Datatype distr_arr; MPI_Request req;
-            MPI_Type_create_darray(numprocs, r, 2, global_dims, distr_modes, distr_block, procgr_dims, MPI_ORDER_C, MPI_DOUBLE, &distr_arr);
-            MPI_Type_commit(&distr_arr);
-
-            // Send corresponding data to process
-            if(!r) MPI_Isend(a, 1, distr_arr, r, 2711, comm, &req);
-            else MPI_Send(a, 1, distr_arr, r, 2711, comm);
-
-            MPI_Type_free(&distr_arr);
+static inline void _copy_cyclic(int w, int h, int nb, int blacs_width, int blacs_height, int blacs_col, int blacs_row, double * from,
+                                double * to, long long max_bytes, long long * y, int * y_blk, long long * x, int * x_blk) {
+    long long count = 0, wb = w * sizeof(double), nbb = nb * sizeof(double);
+    char * a =  (char *) from, * b = (char *) to;
+    for(; *y < h; *y += nb * (blacs_width - 1)) {
+        for(; *y_blk < nb && *y < h; (*y_blk)++, (*y)++) {
+            for(; *x < wb; *x += nbb * (blacs_height - 1)) {
+                while(*x_blk < nbb && *x < wb) {
+                    b[count++] = a[*y * wb + (*x)++]; (*x_blk)++;
+                    if(count >= max_bytes) {
+                        // If we fill the buffer, leave the loop with the proper values to do next iteration
+                        if(*x_blk >= nbb || *x >= wb) { *x_blk = 0; *x += nbb * (blacs_height - 1); }
+                        if(*x >= wb) { *x = (long long) (nb * blacs_row) * sizeof(double); (*y_blk)++, (*y)++; }
+                        if(*y_blk >= nb || *y >= h) { *y_blk = 0;  *y += nb * (blacs_width - 1); }
+                        return;
+                    }
+                }
+                *x_blk = 0;
+            }
+            *x = (long long) (nb * blacs_row) * sizeof(double);
         }
+        *y_blk = 0;
     }
-
-    // Receive from root process as contiguous array
-    MPI_Status stat;
-    MPI_Datatype cont = gmc_contiguous_long(MPI_DOUBLE, mp * (long long) nq);
-    MPI_Type_commit(&cont);
-    MPI_Recv(b, 1, cont, 0, 2711, comm, &stat);
-    MPI_Type_free(&cont);
 }
 
-void gmc_collect(int w, int h, double * a, double * b, int blacs_row, int blacs_col, int blacs_width, int blacs_height, int nb, int rank, MPI_Comm comm) {
-    // Configure 2D block-cyclic distribution
-    int numprocs = blacs_width * blacs_height, izero = 0;
-    int global_dims[] = { h, w };
-    int distr_modes[] = { MPI_DISTRIBUTE_CYCLIC, MPI_DISTRIBUTE_CYCLIC };
-    int distr_block[] = { nb, nb };
-    int procgr_dims[] = { blacs_width, blacs_height };
+static inline void _fill_cyclic(int w, int h, int nb, int blacs_width, int blacs_height, int blacs_col, int blacs_row, double * from,
+                                double * to, long long max_bytes, long long * y, int * y_blk, long long * x, int * x_blk) {
+    long long count = 0, wb = w * sizeof(double), nbb = nb * sizeof(double);
+    char * a =  (char *) from, * b = (char *) to;
+    for(; *y < h; *y += nb * (blacs_width - 1)) {
+        for(; *y_blk < nb && *y < h; (*y_blk)++, (*y)++) {
+            for(; *x < wb; *x += nbb * (blacs_height - 1)) {
+                while(*x_blk < nbb && *x < wb) {
+                    b[*y * wb + (*x)++] = a[count++]; (*x_blk)++;
+                    if(count >= max_bytes) {
+                        // If we fill the buffer, leave the loop with the proper values to do next iteration
+                        if(*x_blk >= nbb || *x >= wb) { *x_blk = 0; *x += nbb * (blacs_height - 1); }
+                        if(*x >= wb) { *x = (long long) (nb * blacs_row) * sizeof(double); (*y_blk)++, (*y)++; }
+                        if(*y_blk >= nb || *y >= h) { *y_blk = 0;  *y += nb * (blacs_width - 1); }
+                        return;
+                    }
+                }
+                *x_blk = 0;
+            }
+            *x = (long long) (nb * blacs_row) * sizeof(double);
+        }
+        *y_blk = 0;
+    }
+}
 
-    // Dimensions of local matrix
-    int mp = numroc_(&w, &nb, &blacs_row, &izero, &blacs_height);
-    int nq = numroc_(&h, &nb, &blacs_col, &izero, &blacs_width);
-
-    // Create type to support potentially huge buffers
-    MPI_Datatype cont = gmc_contiguous_long(MPI_DOUBLE, mp * (long long) nq);
-    MPI_Type_commit(&cont);
+void gmc_distribute(int w, int h, double * a, double * b, int rank, int blacs_width, int blacs_height, int nb, MPI_Comm comm) {
+    int izero = 0, numprocs = blacs_width * blacs_height;
+    MPI_Bcast(&w, 1, MPI_INT, 0, comm);
+    MPI_Bcast(&h, 1, MPI_INT, 0, comm);
 
     if(!rank) {
-        MPI_Request req;
-        MPI_Isend(a, 1, cont, 0, 2712, comm, &req);
-
         #pragma omp parallel for
         for(int r = 0; r < numprocs; r++) {
-            MPI_Datatype distr_arr;
-            MPI_Type_create_darray(numprocs, r, 2, global_dims, distr_modes, distr_block, procgr_dims, MPI_ORDER_C, MPI_DOUBLE, &distr_arr);
-            MPI_Type_commit(&distr_arr);
+            // Dimensions of r's local matrix
+            int blacs_col = r / blacs_height;
+            int blacs_row = r % blacs_height;
+            long long mp = numroc_(&w, &nb, &blacs_row, &izero, &blacs_height);
+            long long nq = numroc_(&h, &nb, &blacs_col, &izero, &blacs_width);
+            long long numbytes = mp * nq * sizeof(double);
 
-            // Receive from each process and place into the global matrix
-            MPI_Status stat;
-            MPI_Recv(b, 1, distr_arr, r, 2712, comm, &stat);
+            // Set up block-cyclic distribution start
+            long long y = nb * blacs_col, x = (long long) (nb * blacs_row) * sizeof(double);
+            int y_blk = 0, x_blk = 0;
+            if(!r) {
+                // Self: copy into local buffer
+                _copy_cyclic(w, h, nb, blacs_width, blacs_height, blacs_col, blacs_row, a, b, LLONG_MAX, &y, &y_blk, &x, &x_blk);
+                continue;
+            }
+
+            // Send to process: split the message in chunks to control max size
+            double * buf = malloc(_minl(numbytes, MAX_MPI_MSG_BYTES));
+            for(long long pos = 0; pos < numbytes; pos += MAX_MPI_MSG_BYTES) {
+                _copy_cyclic(w, h, nb, blacs_width, blacs_height, blacs_col, blacs_row, a, buf, MAX_MPI_MSG_BYTES, &y, &y_blk, &x, &x_blk);
+                long long amt = _minl(numbytes - pos, MAX_MPI_MSG_BYTES);
+                MPI_Send(buf, (int) amt, MPI_BYTE, r, 2711, comm);
+            }
+            free(buf);
         }
 
         return;
     }
 
-    // Send data to root process as contiguous array
-    MPI_Send(a, 1, cont, 0, 2712, comm);
-    MPI_Type_free(&cont);
+    // Dimensions of local matrix
+    int blacs_col = rank / blacs_height;
+    int blacs_row = rank % blacs_height;
+    long long mp = numroc_(&w, &nb, &blacs_row, &izero, &blacs_height);
+    long long nq = numroc_(&h, &nb, &blacs_col, &izero, &blacs_width);
+    long long numbytes = mp * nq * sizeof(double);
+
+    // Receive matching chunks
+    char * recvbuf = (char *) b;
+    for(long long pos = 0; pos < numbytes; pos += MAX_MPI_MSG_BYTES) {
+        long long amt = _minl(numbytes - pos, MAX_MPI_MSG_BYTES);
+        MPI_Recv(recvbuf + pos, (int) amt, MPI_BYTE, 0, 2711, comm, MPI_STATUS_IGNORE);
+    }
+}
+
+void gmc_collect(int w, int h, double * a, double * b, int rank, int blacs_width, int blacs_height, int nb, MPI_Comm comm) {
+    int izero = 0, numprocs = blacs_width * blacs_height;
+    MPI_Bcast(&w, 1, MPI_INT, 0, comm);
+    MPI_Bcast(&h, 1, MPI_INT, 0, comm);
+
+    if(!rank) {
+        #pragma omp parallel for
+        for(int r = 0; r < numprocs; r++) {
+            // Dimensions of r's local matrix
+            int blacs_col = r / blacs_height;
+            int blacs_row = r % blacs_height;
+            long long mp = numroc_(&w, &nb, &blacs_row, &izero, &blacs_height);
+            long long nq = numroc_(&h, &nb, &blacs_col, &izero, &blacs_width);
+            long long numbytes = mp * nq * sizeof(double);
+
+            // Set up block-cyclic distribution start
+            long long y = nb * blacs_col, x = (long long) (nb * blacs_row) * sizeof(double);
+            int y_blk = 0, x_blk = 0;
+            if(!r) {
+                // Self: place values from local buffer into global matrix
+                _fill_cyclic(w, h, nb, blacs_width, blacs_height, blacs_col, blacs_row, a, b, LLONG_MAX, &y, &y_blk, &x, &x_blk);
+                continue;
+            }
+
+            // Receive from process: receive matching chunks and place them into global matrix
+            double * buf = malloc(_minl(numbytes, MAX_MPI_MSG_BYTES));
+            for(long long pos = 0; pos < numbytes; pos += MAX_MPI_MSG_BYTES) {
+                long long amt = _minl(numbytes - pos, MAX_MPI_MSG_BYTES);
+                MPI_Recv(buf, (int) amt, MPI_BYTE, r, 2712, comm, MPI_STATUS_IGNORE);
+                _fill_cyclic(w, h, nb, blacs_width, blacs_height, blacs_col, blacs_row, buf, b, MAX_MPI_MSG_BYTES, &y, &y_blk, &x, &x_blk);
+            }
+            free(buf);
+        }
+
+        return;
+    }
+
+    // Dimensions of local matrix
+    int blacs_col = rank / blacs_height;
+    int blacs_row = rank % blacs_height;
+    long long mp = numroc_(&w, &nb, &blacs_row, &izero, &blacs_height);
+    long long nq = numroc_(&h, &nb, &blacs_col, &izero, &blacs_width);
+    long long numbytes = mp * nq * sizeof(double);
+
+    // Send message in chunks to ensure we don't exceed max message size
+    char * sendbuf = (char *) a;
+    for(long long pos = 0; pos < numbytes; pos += MAX_MPI_MSG_BYTES) {
+        long long amt = _minl(numbytes - pos, MAX_MPI_MSG_BYTES);
+        MPI_Send(sendbuf + pos, (int) amt, MPI_BYTE, 0, 2712, comm);
+    }
+}
+
+void gmc_scatter(long long w, int h, void * a, void * b, int rank, int numprocs, MPI_Comm comm) {
+    MPI_Bcast(&w, 1, MPI_LONG, 0, comm);
+    MPI_Bcast(&h, 1, MPI_INT, 0, comm);
+
+    if(!rank) {
+        #pragma omp parallel for
+        for(int r = 0; r < numprocs; r++) {
+            // Rows assigned to process
+            long long numrows = h / numprocs + (r < h % numprocs);
+            long long numbytes = numrows * w;
+            if(!r) {
+                // Self: copy directly into local
+                memcpy(b, a, numbytes);
+                continue;
+            }
+
+            // Send to process: split message in chunks
+            void * offset = a + ((long long) (h / numprocs) * (long long) r + _minl(h % numprocs, r)) * w;
+            for(long long pos = 0; pos < numbytes; pos += MAX_MPI_MSG_BYTES) {
+                long long amt = _minl(numbytes - pos, MAX_MPI_MSG_BYTES);
+                MPI_Send(offset + pos, (int) amt, MPI_BYTE, r, 2713, comm);
+            }
+        }
+
+        return;
+    }
+
+    // Rows assigned to process
+    long long numrows = h / numprocs + (rank < h % numprocs);
+    long long numbytes = numrows * w;
+
+    // Receive matching chunks
+    for(long long pos = 0; pos < numbytes; pos += MAX_MPI_MSG_BYTES) {
+        long long amt = _minl(numbytes - pos, MAX_MPI_MSG_BYTES);
+        MPI_Recv(b + pos, (int) amt, MPI_BYTE, 0, 2713, comm, MPI_STATUS_IGNORE);
+    }
+}
+
+void gmc_gather(long long w, int h, void * a, void * b, int rank, int numprocs, MPI_Comm comm) {
+    MPI_Bcast(&w, 1, MPI_LONG, 0, comm);
+    MPI_Bcast(&h, 1, MPI_INT, 0, comm);
+
+    if(!rank) {
+        #pragma omp parallel for
+        for(int r = 0; r < numprocs; r++) {
+            // Rows assigned to process
+            long long numrows = h / numprocs + (r < h % numprocs);
+            long long numbytes = numrows * w;
+            if(!r) {
+                // Self: copy directly from local
+                memcpy(b, a, numbytes);
+                continue;
+            }
+
+            // Receive matching chunks from process
+            void * offset = b + ((long long) (h / numprocs) * (long long) r + _minl(h % numprocs, r)) * w;
+            for(long long pos = 0; pos < numbytes; pos += MAX_MPI_MSG_BYTES) {
+                long long amt = _minl(numbytes - pos, MAX_MPI_MSG_BYTES);
+                MPI_Recv(offset + pos, (int) amt, MPI_BYTE, r, 2714, comm, MPI_STATUS_IGNORE);
+            }
+        }
+
+        return;
+    }
+
+    // Rows assigned to process
+    long long numrows = h / numprocs + (rank < h % numprocs);
+    long long numbytes = numrows * w;
+
+    // Send message in chunks
+    for(long long pos = 0; pos < numbytes; pos += MAX_MPI_MSG_BYTES) {
+        long long amt = _minl(numbytes - pos, MAX_MPI_MSG_BYTES);
+        MPI_Send(a + pos, (int) amt, MPI_BYTE, 0, 2714, comm);
+    }
 }
