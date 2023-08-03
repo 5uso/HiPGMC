@@ -252,6 +252,7 @@ GMC_INTERNAL bool __gmc_main_loop(int it, sparse_matrix * S0, matrix U, matrix w
     *F = temp;
     ev = evs.data + (long long)(c + 1) * (long long) it;
 
+    if(!rank) F->data = realloc(F->data, (long long) num * (long long) num * sizeof(double));
     gmc_gather((long long) num * sizeof(double), num, U.data, F->data, rank, numprocs, comm);
     *F = update_f(*F, ev, c, rank, blacs_row, blacs_col, blacs_height, blacs_width, blacs_ctx, comm, handle);
 
@@ -410,7 +411,7 @@ gmc_result gmc(matrix * X, int m, int c, double lambda, bool normalize, MPI_Comm
     GMC_STEP("Init: F");
     if(!rank) {
         F = new_matrix(num, num);
-        F_old = new_matrix(num, num);
+        F_old = new_matrix(num, c);
         evs = new_matrix(c + 1, NITER + 1);
     }
 

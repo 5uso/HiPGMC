@@ -140,6 +140,7 @@ matrix update_f(matrix F, double * ev, int c, int rank, int blacs_row, int blacs
     int lld_local = mp > 1 ? mp : 1;
     descinit_(&flocald, &n, &n, &nb, &nb, &izero, &izero, &blacs_ctx, &lld_local, &info);
     gmc_distribute(n, n, F.data, f_local.data, rank, blacs_width, blacs_height, nb, comm);
+    if(!rank) free_matrix(F);
 
     // Call eigensolver. Eigenvalues are given in ascending order. We are responsible for freeing the returned buffers.
     // We are using row major upper triangular, but since fortran uses column major, we indicate lower triangular,
@@ -155,8 +156,8 @@ matrix update_f(matrix F, double * ev, int c, int rank, int blacs_row, int blacs
     #endif
 
     // Collect eigenvectors into process 0, set height to only work with c eigvecs, c+1 is only needed for eigval
-    gmc_collect(n, n, eigenvectors, F.data, rank, blacs_width, blacs_height, nb, comm);
-    F.h = c;
+    if(!rank) F = new_matrix(n, c);
+    gmc_collect(n, c, eigenvectors, F.data, rank, blacs_width, blacs_height, nb, comm);
 
     if(!rank) memcpy(ev, eigenvalues, (long long) (c + 1) * sizeof(double));
 
