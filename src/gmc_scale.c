@@ -1,4 +1,4 @@
-#include "gmc_scalapack.h"
+#include "gmc_scale.h"
 
 static inline int _max(int a, int b) {
     return b > a ? b : a;

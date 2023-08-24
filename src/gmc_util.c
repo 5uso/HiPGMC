@@ -1,4 +1,4 @@
-#include "gmc_testing.h"
+#include "gmc_util.h"
 
 static inline double rand_d(double min, double max) {
     return min + (rand() / (RAND_MAX / (max - min)));

@@ -1,8 +1,8 @@
 #ifndef GMC
 #define GMC
 
-#include "gmc_scalapack.h"
 #include "gmc_matrix.h"
+#include "gmc_scale.h"
 #include "gmc_funs.h"
 #include "gmc_heap.h"
 #include "gmc_sum.h"

@@ -1,5 +1,5 @@
-#include "gmc_scalapack.h"
-#include "gmc_testing.h"
+#include "gmc_scale.h"
+#include "gmc_util.h"
 #include "gmc_io.h"
 #include "gmc.h"
 
@@ -8,12 +8,16 @@
 #include <mpi.h>
 
 static dataset data[] = {
-    {.path =    "../data/TwoMoon", .views = 2, .clusters =   2, .lambda = 1.0, .normalize = false},
-    {.path =  "../data/ThreeRing", .views = 2, .clusters =   3, .lambda = 1.0, .normalize = false},
-    {.path =        "../data/BBC", .views = 4, .clusters =   5, .lambda = 1.0, .normalize =  true},
-    {.path =     "../data/Hdigit", .views = 2, .clusters =  10, .lambda = 1.0, .normalize =  true},
-    {.path =  "../data/100leaves", .views = 3, .clusters = 100, .lambda = 1.0, .normalize =  true},
-    {.path = "../data/Nuswide20k", .views = 5, .clusters =  81, .lambda = 1.0, .normalize = false},
+    {.path =    "../data/TwoMoon", .views = 2, .clusters =    2, .lambda = 1.0, .normalize = false},
+    {.path =  "../data/ThreeRing", .views = 2, .clusters =    3, .lambda = 1.0, .normalize = false},
+    {.path =        "../data/BBC", .views = 4, .clusters =    5, .lambda = 1.0, .normalize =  true},
+    {.path =     "../data/Hdigit", .views = 2, .clusters =   10, .lambda = 1.0, .normalize =  true},
+    {.path =  "../data/100leaves", .views = 3, .clusters =  100, .lambda = 1.0, .normalize =  true},
+    {.path = "../data/Nuswide20k", .views = 5, .clusters =   81, .lambda = 1.0, .normalize = false},
+    {.path =       "../data/Aloi", .views = 4, .clusters = 1000, .lambda = 1.0, .normalize =  true},
+    {.path =    "../data/Airline", .views = 3, .clusters =    2, .lambda = 1.0, .normalize =  true},
+    {.path =   "../data/Diabetes", .views = 1, .clusters =    2, .lambda = 1.0, .normalize =  true},
+    {.path =      "../data/Covid", .views = 2, .clusters =    7, .lambda = 1.0, .normalize =  true},
 };
 
 int main(int argc, char *argv[]) {
@@ -39,6 +43,8 @@ int main(int argc, char *argv[]) {
         dataset d = data[0];
         printf("Loading dataset from '%s'\n", d.path);
         matrix * X = read_dataset(d.path);
+        //dataset d = {.path = "", .views = 3, .clusters = 4, .lambda = 1.0, .normalize = false};
+        //matrix * X = generate_data(40000, 3, 100, 4, -1.0);
         if(!X) {
             perror("Couldn't load dataset");
             exit(1);
