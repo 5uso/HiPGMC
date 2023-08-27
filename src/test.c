@@ -13,11 +13,16 @@ typedef struct dataset {
 } dataset;
 
 static dataset data[] = {
-    {.path =   "../data/TwoMoon", .views = 2, .clusters =   2, .lambda = 1.0, .normalize = false},
-    {.path = "../data/ThreeRing", .views = 2, .clusters =   3, .lambda = 1.0, .normalize = false},
-    {.path =       "../data/BBC", .views = 4, .clusters =   5, .lambda = 1.0, .normalize =  true},
-    {.path =    "../data/Hdigit", .views = 2, .clusters =  10, .lambda = 1.0, .normalize =  true},
-    {.path = "../data/100leaves", .views = 3, .clusters = 100, .lambda = 1.0, .normalize =  true},
+    {.path =   "../data/TwoMoon", .views = 2, .clusters =   2, .lambda = 1.0, .normalize = false},//0
+    {.path = "../data/ThreeRing", .views = 2, .clusters =   3, .lambda = 1.0, .normalize = false},//1
+    {.path =       "../data/BBC", .views = 4, .clusters =   5, .lambda = 1.0, .normalize =  true},//2
+    {.path =    "../data/Hdigit", .views = 2, .clusters =  10, .lambda = 1.0, .normalize =  true},//3
+    {.path = "../data/100leaves", .views = 3, .clusters = 100, .lambda = 1.0, .normalize =  true},//4
+    {.path =  "../data/3sources", .views = 3, .clusters =   6, .lambda = 1.0, .normalize =  true},//5
+    {.path =  "../data/BBCSport", .views = 2, .clusters =   5, .lambda = 1.0, .normalize =  true},//6
+    {.path =     "../data/Mfeat", .views = 6, .clusters =  10, .lambda = 1.0, .normalize =  true},//7
+    {.path =       "../data/NGs", .views = 3, .clusters =   5, .lambda = 1.0, .normalize =  true},//8
+    {.path =     "../data/WebKB", .views = 3, .clusters =   4, .lambda = 1.0, .normalize =  true},//9
 };
 
 int main(int argc, char *argv[]) {
