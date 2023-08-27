@@ -8,16 +8,21 @@
 #include <mpi.h>
 
 static dataset data[] = {
-    {.path =    "../data/TwoMoon", .views = 2, .clusters =    2, .lambda = 1.0, .normalize = false},
-    {.path =  "../data/ThreeRing", .views = 2, .clusters =    3, .lambda = 1.0, .normalize = false},
-    {.path =        "../data/BBC", .views = 4, .clusters =    5, .lambda = 1.0, .normalize =  true},
-    {.path =     "../data/Hdigit", .views = 2, .clusters =   10, .lambda = 1.0, .normalize =  true},
-    {.path =  "../data/100leaves", .views = 3, .clusters =  100, .lambda = 1.0, .normalize =  true},
-    {.path = "../data/Nuswide20k", .views = 5, .clusters =   81, .lambda = 1.0, .normalize = false},
-    {.path =       "../data/Aloi", .views = 4, .clusters = 1000, .lambda = 1.0, .normalize =  true},
-    {.path =    "../data/Airline", .views = 3, .clusters =    2, .lambda = 1.0, .normalize =  true},
-    {.path =   "../data/Diabetes", .views = 1, .clusters =    2, .lambda = 1.0, .normalize =  true},
-    {.path =      "../data/Covid", .views = 2, .clusters =    7, .lambda = 1.0, .normalize =  true},
+    {.path =    "../data/TwoMoon", .views = 2, .clusters =    2, .lambda = 1.0, .normalize = false},//0
+    {.path =  "../data/ThreeRing", .views = 2, .clusters =    3, .lambda = 1.0, .normalize = false},//1
+    {.path =        "../data/BBC", .views = 4, .clusters =    5, .lambda = 1.0, .normalize =  true},//2
+    {.path =     "../data/Hdigit", .views = 2, .clusters =   10, .lambda = 1.0, .normalize =  true},//3
+    {.path =  "../data/100leaves", .views = 3, .clusters =  100, .lambda = 1.0, .normalize =  true},//4
+    {.path = "../data/Nuswide20k", .views = 5, .clusters =   81, .lambda = 1.0, .normalize = false},//5
+    {.path =       "../data/Aloi", .views = 4, .clusters = 1000, .lambda = 1.0, .normalize =  true},//6
+    {.path =    "../data/Airline", .views = 3, .clusters =    2, .lambda = 1.0, .normalize =  true},//7
+    {.path =   "../data/Diabetes", .views = 1, .clusters =    2, .lambda = 1.0, .normalize =  true},//8
+    {.path =      "../data/Covid", .views = 2, .clusters =    7, .lambda = 1.0, .normalize =  true},//9
+    {.path =   "../data/3sources", .views = 3, .clusters =    6, .lambda = 1.0, .normalize =  true},//10
+    {.path =   "../data/BBCSport", .views = 2, .clusters =    5, .lambda = 1.0, .normalize =  true},//11
+    {.path =      "../data/Mfeat", .views = 6, .clusters =   10, .lambda = 1.0, .normalize =  true},//12
+    {.path =        "../data/NGs", .views = 3, .clusters =    5, .lambda = 1.0, .normalize =  true},//13
+    {.path =      "../data/WebKB", .views = 3, .clusters =    4, .lambda = 1.0, .normalize =  true},//14
 };
 
 int main(int argc, char *argv[]) {
