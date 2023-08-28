@@ -48,23 +48,17 @@ matrix sqr_dist(matrix m, int rank, int blacs_row, int blacs_col, int blacs_heig
     #endif
 
     // Compute final matrix
-    matrix d = new_matrix(m.w, m.w);
     #pragma omp parallel for
     for(long long i = 0; i < m.w; i++) {
-        for(long long j = 0; j < m.w; j++) {
-            if(i == j) {
-                d.data[j * d.w + i] = d.data[i * d.w + j] = 0.0;
-                continue;
-            }
-
-            double mul = i < j ? mt.data[i * mt.w + j] : mt.data[j * mt.w + i];
-            d.data[j * d.w + i] = d.data[i * d.w + j] = ssc[i] + ssc[j] - 2.0 * mul;
+        mt.data[i * m.w + i] = 0.0;
+        for(long long j = i + 1; j < m.w; j++) {
+            double mul = mt.data[i * m.w + j];
+            mt.data[j * m.w + i] = mt.data[i * m.w + j] = ssc[i] + ssc[j] - 2.0 * mul;
         }
     }
 
     free(ssc);
-    free_matrix(mt);
-    return d;
+    return mt;
 }
 
 matrix update_u(matrix q) { // Height of q is m
